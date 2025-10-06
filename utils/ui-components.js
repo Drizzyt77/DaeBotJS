@@ -13,7 +13,6 @@ const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } 
 const COMPONENT_IDS = {
     CHARACTER_SELECT: 'char_character_select',
     DUNGEON_SELECT: 'char_dungeon_select',
-    SPEC_SELECT: 'char_spec_select',
     REFRESH_DATA: 'char_refresh_data',
     MAIN_MENU: 'char_main_menu',
     RAID_DATA: 'char_raid_data',
@@ -24,25 +23,6 @@ const COMPONENT_IDS = {
     VIEW_MODE_DETAILED: 'char_view_detailed',
     VIEW_MODE_COMPACT: 'char_view_compact',
     VIEW_MODE_COMPARISON: 'char_view_comparison'
-};
-
-/**
- * Mapping of WoW classes to their available specs
- */
-const CLASS_SPECS = {
-    'Death Knight': ['Blood', 'Frost', 'Unholy'],
-    'Demon Hunter': ['Havoc', 'Vengeance'],
-    'Druid': ['Balance', 'Feral', 'Guardian', 'Restoration'],
-    'Evoker': ['Devastation', 'Preservation', 'Augmentation'],
-    'Hunter': ['Beast Mastery', 'Marksmanship', 'Survival'],
-    'Mage': ['Arcane', 'Fire', 'Frost'],
-    'Monk': ['Brewmaster', 'Mistweaver', 'Windwalker'],
-    'Paladin': ['Holy', 'Protection', 'Retribution'],
-    'Priest': ['Discipline', 'Holy', 'Shadow'],
-    'Rogue': ['Assassination', 'Outlaw', 'Subtlety'],
-    'Shaman': ['Elemental', 'Enhancement', 'Restoration'],
-    'Warlock': ['Affliction', 'Demonology', 'Destruction'],
-    'Warrior': ['Arms', 'Fury', 'Protection']
 };
 
 /**
@@ -86,42 +66,6 @@ function createDungeonSelectMenu(dungeons) {
             value: dungeon,
             description: `Compare all characters in ${dungeon}`
         }));
-
-    selectMenu.addOptions(options);
-    return selectMenu;
-}
-
-/**
- * Creates a spec selection dropdown menu for filtering runs by spec
- * @param {string} characterClass - WoW class name (e.g., 'Shaman', 'Paladin')
- * @param {string} currentSpec - Currently selected spec (default: 'Overall')
- * @returns {StringSelectMenuBuilder} Discord select menu component
- */
-function createSpecSelectMenu(characterClass, currentSpec = 'Overall') {
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(COMPONENT_IDS.SPEC_SELECT)
-        .setPlaceholder('Select spec to view');
-
-    // Start with "Overall" option
-    const options = [{
-        label: 'Overall',
-        value: 'Overall',
-        description: 'View all runs across all specs',
-        default: currentSpec === 'Overall'
-    }];
-
-    // Add class-specific specs if class is recognized
-    if (characterClass && CLASS_SPECS[characterClass]) {
-        const specs = CLASS_SPECS[characterClass];
-        specs.forEach(spec => {
-            options.push({
-                label: spec,
-                value: spec,
-                description: `View ${spec} spec runs only`,
-                default: currentSpec === spec
-            });
-        });
-    }
 
     selectMenu.addOptions(options);
     return selectMenu;
@@ -286,12 +230,9 @@ function createMainMenuComponents(characters, dungeons) {
  * @param {Array} characters - Array of character objects for dropdown menu
  * @param {Set|Array} dungeons - Set or array of dungeon names for dropdown menu
  * @param {string} currentViewMode - Current view mode for styling buttons
- * @param {string} characterName - Name of the current character (for persistence)
- * @param {string} characterClass - Class of the current character (for spec dropdown)
- * @param {string} currentSpec - Currently selected spec filter (default: 'Overall')
  * @returns {Array} Array of ActionRowBuilder components
  */
-function createCharacterDetailComponents(includeRefresh = true, characters = [], dungeons = new Set(), currentViewMode = 'detailed', characterName = null, characterClass = null, currentSpec = 'Overall') {
+function createCharacterDetailComponents(includeRefresh = true, characters = [], dungeons = new Set(), currentViewMode = 'detailed', characterName = null) {
     const components = [];
 
     // Character selection row
@@ -299,13 +240,6 @@ function createCharacterDetailComponents(includeRefresh = true, characters = [],
         const characterRow = new ActionRowBuilder()
             .addComponents(createCharacterSelectMenu(characters));
         components.push(characterRow);
-    }
-
-    // Spec selection row (for filtering by spec)
-    if (characterClass) {
-        const specRow = new ActionRowBuilder()
-            .addComponents(createSpecSelectMenu(characterClass, currentSpec));
-        components.push(specRow);
     }
 
     // Dungeon selection row
@@ -497,10 +431,8 @@ function validateComponentData(characters) {
 
 module.exports = {
     COMPONENT_IDS,
-    CLASS_SPECS,
     createCharacterSelectMenu,
     createDungeonSelectMenu,
-    createSpecSelectMenu,
     createRefreshButton,
     createMainMenuButton,
     createRaidStatsButton,
