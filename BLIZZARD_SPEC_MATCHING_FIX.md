@@ -69,16 +69,6 @@ This allows updating spec data for runs that were previously inserted with incor
 - Spec accuracy: 33.3%
 - Existing incorrect specs automatically updated
 
-## Testing
-Run collection test:
-```bash
-node test-collection.js
-```
-
-Check database:
-```bash
-node debug-database.js
-```
 
 ## Benefits
 1. **Accurate spec tracking**: Runs now tagged with the actual spec used
