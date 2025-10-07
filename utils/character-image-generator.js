@@ -327,7 +327,13 @@ async function generateCharacterImage(characterData, gearData, viewMode = VIEW_M
         logger.info('Starting character image generation', {
             characterName: characterData.name,
             hasGearData: !!gearData,
-            viewMode: currentViewMode
+            viewMode: currentViewMode,
+            runsCount: characterData.mythic_plus_runs?.length || 0,
+            runsSample: characterData.mythic_plus_runs?.slice(0, 3).map(r => ({
+                dungeon: r.dungeon,
+                level: r.mythic_level,
+                spec: r.spec_name
+            })) || []
         });
 
         // Create canvas
