@@ -7,6 +7,17 @@
 
 const logger = require('../utils/logger');
 
+/**
+ * Current Mythic Keystone Season ID
+ * Update this when a new season starts
+ *
+ * Season History:
+ * - Season 13: TWW Season 2
+ * - Season 14: TWW Season 2.5
+ * - Season 15: TWW Season 3
+ */
+const CURRENT_BLIZZARD_SEASON = 15;
+
 const BLIZZARD_CONFIG = {
     OAUTH_URL: 'https://oauth.battle.net/token',
     API_BASE_URL: 'https://us.api.blizzard.com',
@@ -178,21 +189,23 @@ class BlizzardClient {
      * @param {string} characterName - Character name
      * @param {string} realm - Realm slug
      * @param {string} region - Region
+     * @param {number} seasonId - Season ID (defaults to current season)
      * @returns {Promise<Object|null>} Season details with runs
      */
-    async getCurrentSeasonProfile(characterName, realm = 'thrall', region = 'us') {
+    async getCurrentSeasonProfile(characterName, realm = 'thrall', region = 'us', seasonId = CURRENT_BLIZZARD_SEASON) {
         if (!this.isConfigured()) {
             return null;
         }
 
         const realmSlug = realm.toLowerCase().replace(/'/g, '').replace(/\s+/g, '-');
         const charNameLower = characterName.toLowerCase();
-        const endpoint = `/profile/wow/character/${realmSlug}/${charNameLower}/mythic-keystone-profile/season/13`;
+        const endpoint = `/profile/wow/character/${realmSlug}/${charNameLower}/mythic-keystone-profile`;
         const namespace = `profile-${region}`;
 
         logger.debug('Fetching Blizzard current season profile', {
             characterName,
-            realm: realmSlug
+            realm: realmSlug,
+            season: seasonId
         });
 
         return await this.makeRequest(endpoint, namespace);
@@ -208,11 +221,28 @@ class BlizzardClient {
     extractSpecData(seasonProfile, characterName) {
         const specMap = new Map();
 
-        if (!seasonProfile || !seasonProfile.best_runs) {
+        if (!seasonProfile) {
             return specMap;
         }
 
-        for (const run of seasonProfile.best_runs) {
+        // Get best runs from either current_period or direct best_runs property
+        const bestRuns = seasonProfile.current_period?.best_runs || seasonProfile.best_runs;
+
+        if (!bestRuns || !Array.isArray(bestRuns)) {
+            logger.warn('No best runs found in Blizzard profile', {
+                characterName,
+                hasCurrentPeriod: !!seasonProfile.current_period,
+                hasBestRuns: !!seasonProfile.best_runs
+            });
+            return specMap;
+        }
+
+        logger.debug('Processing Blizzard runs for spec extraction', {
+            characterName,
+            runsFound: bestRuns.length
+        });
+
+        for (const run of bestRuns) {
             if (!run.members) continue;
 
             // Find the character in the run members
@@ -222,8 +252,8 @@ class BlizzardClient {
 
             if (member && member.specialization) {
                 // Create a unique key for this run (dungeon + mythic_level + completed_timestamp)
-                const completedTimestamp = new Date(run.completed_timestamp).getTime();
-                const key = `${run.dungeon.name}_${run.mythic_level}_${completedTimestamp}`;
+                const completedTimestamp = run.completed_timestamp; // Already in milliseconds
+                const key = `${run.dungeon.name}_${run.keystone_level}_${completedTimestamp}`;
 
                 specMap.set(key, {
                     spec_name: member.specialization.name,
@@ -233,8 +263,11 @@ class BlizzardClient {
 
                 logger.debug('Extracted spec from Blizzard run', {
                     dungeon: run.dungeon.name,
-                    level: run.mythic_level,
-                    spec: member.specialization.name
+                    level: run.keystone_level,
+                    spec: member.specialization.name,
+                    timestamp: completedTimestamp,
+                    key: key,
+                    completed_at_iso: new Date(completedTimestamp).toISOString()
                 });
             }
         }
@@ -262,4 +295,4 @@ class BlizzardClient {
     }
 }
 
-module.exports = { BlizzardClient };
+module.exports = { BlizzardClient, CURRENT_BLIZZARD_SEASON };

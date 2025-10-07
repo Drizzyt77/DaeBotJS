@@ -103,11 +103,28 @@ class RunCollector {
         const blizzardSpec = blizzardSpecMap.get(key);
 
         if (blizzardSpec) {
+            logger.debug('Matched run with Blizzard spec data', {
+                dungeon: run.dungeon,
+                level: run.mythic_level,
+                spec: blizzardSpec.spec_name,
+                key
+            });
+
             return {
                 spec_name: blizzardSpec.spec_name,
                 spec_role: blizzardSpec.role,
                 source: 'blizzard'
             };
+        }
+
+        // Log when fallback is used
+        if (blizzardSpecMap.size > 0) {
+            logger.debug('No Blizzard match found, using fallback', {
+                dungeon: run.dungeon,
+                level: run.mythic_level,
+                key,
+                availableBlizzardKeys: Array.from(blizzardSpecMap.keys()).slice(0, 3)
+            });
         }
 
         // Fall back to character's current active spec
@@ -134,10 +151,11 @@ class RunCollector {
         try {
             logger.info('Collecting best runs for character', { characterName, realm, region });
 
-            // Fetch character data with best runs AND alternate runs for more coverage
+            // Fetch character data with best runs, alternate runs, AND recent runs
+            // Recent runs is key for matching with Blizzard API spec data
             const characterData = await this.raiderIO.fetchCharacterData(
                 [characterName],
-                'mythic_plus_best_runs,mythic_plus_alternate_runs,mythic_plus_scores_by_season:current,gear',
+                'mythic_plus_best_runs,mythic_plus_alternate_runs,mythic_plus_recent_runs,mythic_plus_scores_by_season:current,gear',
                 (rawData) => ({
                     name: rawData.name,
                     class: rawData.class,
@@ -145,6 +163,7 @@ class RunCollector {
                     active_spec_role: rawData.active_spec_role,
                     best_runs: rawData.mythic_plus_best_runs || [],
                     alternate_runs: rawData.mythic_plus_alternate_runs || [],
+                    recent_runs: rawData.mythic_plus_recent_runs || [],
                     scores: rawData.mythic_plus_scores_by_season || []
                 })
             );
@@ -184,8 +203,25 @@ class RunCollector {
                 fallback_specs: 0
             };
 
-            // Combine best runs and alternate runs
-            const allRuns = [...charData.best_runs, ...charData.alternate_runs];
+            // Combine best runs, alternate runs, and recent runs, removing duplicates
+            // Recent runs are crucial for matching with Blizzard API spec data
+            const allRunsRaw = [...charData.best_runs, ...charData.alternate_runs, ...charData.recent_runs];
+
+            // Deduplicate by dungeon + level + timestamp
+            const runMap = new Map();
+            for (const run of allRunsRaw) {
+                const key = `${run.dungeon}_${run.mythic_level}_${run.completed_at}`;
+                if (!runMap.has(key)) {
+                    runMap.set(key, run);
+                }
+            }
+            const allRuns = Array.from(runMap.values());
+
+            logger.debug('Deduplicated runs before insertion', {
+                total: allRunsRaw.length,
+                unique: allRuns.length,
+                duplicates: allRunsRaw.length - allRuns.length
+            });
 
             for (const run of allRuns) {
                 // Get spec data (accurate from Blizzard or fallback to active spec)

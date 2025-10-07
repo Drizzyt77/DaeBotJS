@@ -220,9 +220,33 @@ The bot:
    - Only give bot access to what it needs
    - Blizzard credentials should only be on the bot server
 
+## Season Updates
+
+When a new Mythic+ season starts, update the season ID:
+
+**File:** `services/blizzard-client.js`
+
+```javascript
+// Update this constant at the top of the file
+const CURRENT_BLIZZARD_SEASON = 15; // Change to new season ID
+```
+
+**How to find the current season ID:**
+1. Go to https://develop.battle.net/documentation/world-of-warcraft/game-data-apis
+2. Look at the Mythic Keystone Season API
+3. Or check your character's profile API response
+
+**Season History:**
+- Season 13: TWW Season 2
+- Season 14: TWW Season 2.5
+- Season 15: TWW Season 3 (current)
+
+After updating, restart the bot for changes to take effect.
+
 ---
 
 **Created:** 2025-01-14
+**Updated:** 2025-01-14
 **Status:** Production Ready
 **Required:** Optional (fallback works without it)
 **Recommended:** Yes (for accurate spec data)

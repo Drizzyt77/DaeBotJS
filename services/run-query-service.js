@@ -128,7 +128,13 @@ function enhanceCharacterWithDBRuns(characterData, selectedSpec = null, options 
             characterName,
             selectedSpec,
             availableSpecs,
-            dbRunsCount: dbRuns.length
+            dbRunsCount: dbRuns.length,
+            dbRunsSample: dbRuns.slice(0, 3).map(r => ({
+                dungeon: r.dungeon,
+                level: r.mythic_level,
+                spec: r.spec_name,
+                score: r.score
+            }))
         });
 
         // Return enhanced character data

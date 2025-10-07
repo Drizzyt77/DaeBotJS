@@ -23,7 +23,7 @@ const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
 /**
  * Database schema version for migrations
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * MythicRunsDatabase class
@@ -154,6 +154,65 @@ class MythicRunsDatabase {
 
             logger.info('Migration 0 -> 1 completed');
         }
+
+        // Migration 1 -> 2: Fix unique constraint for proper deduplication
+        if (fromVersion < 2) {
+            logger.info('Applying migration 1 -> 2: Fixing unique constraint');
+
+            this.db.exec(`
+                -- Create new table with correct unique constraint
+                CREATE TABLE mythic_runs_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL,
+                    dungeon TEXT NOT NULL,
+                    mythic_level INTEGER NOT NULL,
+                    completed_timestamp INTEGER NOT NULL,
+                    duration INTEGER NOT NULL,
+                    keystone_run_id INTEGER,
+                    is_completed_within_time BOOLEAN NOT NULL DEFAULT 0,
+                    score REAL NOT NULL DEFAULT 0,
+                    num_keystone_upgrades INTEGER NOT NULL DEFAULT 0,
+                    spec_name TEXT,
+                    spec_role TEXT,
+                    affixes TEXT,
+                    season TEXT,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+                    UNIQUE(character_id, dungeon, mythic_level, completed_timestamp)
+                );
+
+                -- Copy unique data from old table (remove duplicates)
+                INSERT INTO mythic_runs_new
+                SELECT id, character_id, dungeon, mythic_level, completed_timestamp, duration,
+                       keystone_run_id, is_completed_within_time, score, num_keystone_upgrades,
+                       spec_name, spec_role, affixes, season, created_at
+                FROM mythic_runs
+                GROUP BY character_id, dungeon, mythic_level, completed_timestamp
+                HAVING id = MIN(id);
+
+                -- Drop old table
+                DROP TABLE mythic_runs;
+
+                -- Rename new table
+                ALTER TABLE mythic_runs_new RENAME TO mythic_runs;
+
+                -- Recreate indexes
+                CREATE INDEX idx_runs_character ON mythic_runs(character_id);
+                CREATE INDEX idx_runs_timestamp ON mythic_runs(completed_timestamp DESC);
+                CREATE INDEX idx_runs_spec ON mythic_runs(spec_name);
+                CREATE INDEX idx_runs_dungeon ON mythic_runs(dungeon);
+                CREATE INDEX idx_runs_character_spec ON mythic_runs(character_id, spec_name);
+                CREATE INDEX idx_runs_character_dungeon ON mythic_runs(character_id, dungeon);
+                CREATE INDEX idx_runs_season ON mythic_runs(season);
+            `);
+
+            // Record schema version
+            this.db.prepare(
+                'INSERT INTO schema_info (version, applied_at) VALUES (?, ?)'
+            ).run(2, Date.now());
+
+            logger.info('Migration 1 -> 2 completed: Fixed unique constraint for deduplication');
+        }
     }
 
     /**
@@ -211,6 +270,14 @@ class MythicRunsDatabase {
                     keystone_run_id, is_completed_within_time, score, num_keystone_upgrades,
                     spec_name, spec_role, affixes, season, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(character_id, dungeon, mythic_level, completed_timestamp)
+                DO UPDATE SET
+                    spec_name = excluded.spec_name,
+                    spec_role = excluded.spec_role,
+                    score = excluded.score,
+                    num_keystone_upgrades = excluded.num_keystone_upgrades,
+                    is_completed_within_time = excluded.is_completed_within_time
+                WHERE spec_name != excluded.spec_name OR score != excluded.score
             `);
 
             const result = stmt.run(
@@ -230,14 +297,21 @@ class MythicRunsDatabase {
                 now
             );
 
-            return { inserted: true, id: result.lastInsertRowid };
+            // Check if row was inserted or updated
+            if (result.changes > 0) {
+                return { inserted: true, id: result.lastInsertRowid || null, updated: result.changes === 1 && result.lastInsertRowid === 0 };
+            }
+
+            return { inserted: false, id: null };
 
         } catch (error) {
-            // Check if it's a duplicate key error
-            if (error.code === 'SQLITE_CONSTRAINT' && error.message.includes('UNIQUE')) {
-                logger.debug('Duplicate run skipped', { characterId, keystone_run_id, completed_timestamp });
-                return { inserted: false, id: null };
-            }
+            logger.error('Failed to insert/update run', {
+                characterId,
+                dungeon,
+                mythic_level,
+                spec_name,
+                error: error.message
+            });
             throw error;
         }
     }
