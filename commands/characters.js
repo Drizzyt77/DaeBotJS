@@ -73,6 +73,7 @@ const { findMostRelevantRaid, calculateWeeklyStats } = require('../utils/data-fo
 // Import data services
 const data = require('../helpers/get-data');
 const weeklyHelper = require('../helpers/weekly');
+const { enhanceCharacterWithDBRuns, getAvailableSpecs } = require('../services/run-query-service');
 
 // Custom class icons are now loaded directly in data-formatters.js
 
@@ -411,6 +412,7 @@ async function handleCharacterSelectText(interaction, characters) {
             const linksData = getCharacterLinks().find(link => link.name === selectedCharacterName);
             const noDataEmbed = createNoDataEmbed(selectedCharacterName, linksData);
             const dungeons = extractUniqueDungeons(characters);
+            const availableSpecs = getAvailableSpecs(selectedCharacterName, { realm: 'thrall', region: 'us' });
             const components = createCharacterDetailComponents(
                 false,
                 characters,
@@ -418,7 +420,8 @@ async function handleCharacterSelectText(interaction, characters) {
                 'compact',
                 selectedCharacterName,
                 selectedCharacter.class,
-                'Overall'
+                'Overall',
+                availableSpecs
             );
 
             await interaction.update({
@@ -437,6 +440,9 @@ async function handleCharacterSelectText(interaction, characters) {
         const characterGear = gearData.find(gear => gear.name === selectedCharacterName);
         const characterLinks = linksData.find(link => link.name === selectedCharacterName);
 
+        // Get available specs from database
+        const availableSpecs = getAvailableSpecs(selectedCharacterName, { realm: 'thrall', region: 'us' });
+
         // Create detailed character embed
         const detailEmbed = createCharacterDetailEmbed(
             selectedCharacter,
@@ -452,7 +458,8 @@ async function handleCharacterSelectText(interaction, characters) {
             'compact',
             selectedCharacterName,
             selectedCharacter.class,
-            'Overall'
+            'Overall',
+            availableSpecs
         );
 
         await interaction.update({
@@ -471,7 +478,8 @@ async function handleCharacterSelectText(interaction, characters) {
             'compact',
             selectedCharacterName,
             selectedCharacter?.class || null,
-            'Overall'
+            'Overall',
+            []
         );
 
         await interaction.update({
@@ -519,6 +527,7 @@ async function handleCharacterSelect(interaction, characters) {
             const linksData = getCharacterLinks().find(link => link.name === selectedCharacterName);
             const noDataEmbed = createNoDataEmbed(selectedCharacterName, linksData);
             const dungeons = extractUniqueDungeons(characters);
+            const availableSpecs = getAvailableSpecs(selectedCharacterName, { realm: 'thrall', region: 'us' });
             const components = createCharacterDetailComponents(
                 false,
                 characters,
@@ -526,7 +535,8 @@ async function handleCharacterSelect(interaction, characters) {
                 'compact',
                 selectedCharacterName,
                 selectedCharacter.class,
-                'Overall'
+                'Overall',
+                availableSpecs
             );
 
             await interaction.editReply({
@@ -540,8 +550,27 @@ async function handleCharacterSelect(interaction, characters) {
         const gearData = await getGearData();
         const characterGear = gearData.find(gear => gear.name === selectedCharacterName);
 
-        // Generate the character image with compact view as default
-        const imageBuffer = await generateCharacterImage(selectedCharacter, characterGear, 'compact');
+        // Get available specs from database
+        const availableSpecs = getAvailableSpecs(selectedCharacterName, {
+            realm: 'thrall',
+            region: 'us'
+        });
+
+        // Enhance character with database runs (using 'Overall' by default)
+        const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, 'Overall', {
+            realm: 'thrall',
+            region: 'us'
+        });
+
+        logger.debug('Enhanced character with database runs', {
+            characterName: selectedCharacterName,
+            availableSpecs,
+            dbRunsCount: enhancedCharacter.mythic_plus_runs?.length || 0,
+            dataSource: enhancedCharacter.data_source
+        });
+
+        // Generate the character image with compact view as default using database runs
+        const imageBuffer = await generateCharacterImage(enhancedCharacter, characterGear, 'compact');
 
         // Create attachment for the raw image (no embed)
         const { AttachmentBuilder } = require('discord.js');
@@ -556,7 +585,8 @@ async function handleCharacterSelect(interaction, characters) {
             'compact',
             selectedCharacterName,
             selectedCharacter.class,
-            'Overall'
+            'Overall',
+            availableSpecs
         );
 
         await interaction.editReply({
@@ -575,7 +605,8 @@ async function handleCharacterSelect(interaction, characters) {
                 type: 'character_image',
                 characterName: selectedCharacterName,
                 viewMode: 'compact',
-                selectedSpec: 'Overall'
+                selectedSpec: 'Overall',
+                availableSpecs
             });
         }
 
@@ -612,6 +643,12 @@ async function handleCharacterSelect(interaction, characters) {
                     const characterGear = gearData.find(gear => gear.name === selectedCharacterName);
                     const characterLinks = linksData.find(link => link.name === selectedCharacterName);
 
+                    // Get available specs from database for fallback too
+                    const availableSpecs = getAvailableSpecs(selectedCharacterName, {
+                        realm: 'thrall',
+                        region: 'us'
+                    });
+
                     const detailEmbed = createCharacterDetailEmbed(
                         selectedCharacter,
                         characterGear,
@@ -626,7 +663,8 @@ async function handleCharacterSelect(interaction, characters) {
                         'compact',
                         selectedCharacterName,
                         selectedCharacter.class,
-                        'Overall'
+                        'Overall',
+                        availableSpecs
                     );
 
                     await interaction.editReply({
@@ -651,7 +689,8 @@ async function handleCharacterSelect(interaction, characters) {
                 'compact',
                 selectedCharacterName,
                 selectedCharacter?.class || null,
-                'Overall'
+                'Overall',
+                []
             );
 
             if (interaction.deferred) {
@@ -705,7 +744,7 @@ async function handleDungeonSelect(interaction, characters) {
  */
 async function handleSpecSelect(interaction, characters) {
     try {
-        // Defer update since image generation and API calls can take time
+        // Defer update since image generation can take time
         await interaction.deferUpdate();
 
         const selectedSpec = interaction.values[0];
@@ -738,68 +777,28 @@ async function handleSpecSelect(interaction, characters) {
         const gearData = await getGearData();
         const characterGear = gearData.find(gear => gear.name === characterName);
 
-        let filteredCharacter = selectedCharacter;
+        // Get available specs from database
+        const availableSpecs = messageInfo.availableSpecs || getAvailableSpecs(characterName, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
-        // If not "Overall", filter runs by spec using Combined API
-        if (selectedSpec !== 'Overall') {
-            const { CombinedWowClient } = require('../services/combined-wow-client');
-            const { filterRunsBySpec } = require('../utils/spec-filter');
-            const client = new CombinedWowClient();
+        // Enhance character with database runs filtered by selected spec
+        const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, selectedSpec, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
-            logger.info('Fetching spec-specific runs', {
-                characterName,
-                spec: selectedSpec,
-                blizzardConfigured: client.blizzard.isConfigured()
-            });
-
-            // Fetch spec-specific runs from Blizzard API
-            const specRuns = await client.getSpecificRuns(characterName, selectedSpec);
-
-            logger.info('Spec runs fetched', {
-                characterName,
-                spec: selectedSpec,
-                runsReturned: specRuns?.length || 0,
-                sampleRun: specRuns?.[0] || null
-            });
-
-            if (specRuns && specRuns.length > 0) {
-                // Convert Blizzard API format to match RaiderIO format
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: specRuns.map(run => ({
-                        dungeon: run.dungeon,
-                        mythic_level: run.mythic_level,
-                        score: run.map_rating || run.mythic_rating || 0,
-                        timed: run.is_completed_within_time ? 1 : 0
-                    }))
-                };
-
-                logger.info('Filtered runs by spec', {
-                    characterName,
-                    spec: selectedSpec,
-                    originalRuns: selectedCharacter.mythic_plus_runs?.length || 0,
-                    filteredRuns: filteredCharacter.mythic_plus_runs.length
-                });
-            } else {
-                // No runs found for this spec
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: []
-                };
-
-                logger.warn('No runs found for spec', {
-                    characterName,
-                    spec: selectedSpec,
-                    specRunsIsNull: specRuns === null,
-                    specRunsIsUndefined: specRuns === undefined,
-                    specRunsLength: specRuns?.length
-                });
-            }
-        }
+        logger.info('Character enhanced with database runs', {
+            characterName,
+            spec: selectedSpec,
+            dbRunsCount: enhancedCharacter.mythic_plus_runs?.length || 0,
+            dataSource: enhancedCharacter.data_source
+        });
 
         // Generate character image with filtered data
         const viewMode = messageInfo.viewMode || 'compact';
-        const imageBuffer = await generateCharacterImage(filteredCharacter, characterGear, viewMode);
+        const imageBuffer = await generateCharacterImage(enhancedCharacter, characterGear, viewMode);
 
         // Create attachment
         const { AttachmentBuilder } = require('discord.js');
@@ -816,7 +815,8 @@ async function handleSpecSelect(interaction, characters) {
             viewMode,
             characterName,
             selectedCharacter.class,
-            selectedSpec
+            selectedSpec,
+            availableSpecs
         );
 
         await interaction.editReply({
@@ -830,14 +830,16 @@ async function handleSpecSelect(interaction, characters) {
         if (interaction.message) {
             activeMessages.set(interaction.message.id, {
                 ...messageInfo,
-                selectedSpec
+                selectedSpec,
+                availableSpecs
             });
         }
 
-        logger.info('Character image regenerated with spec filter', {
+        logger.info('Character image regenerated with spec filter from database', {
             characterName,
             spec: selectedSpec,
-            viewMode
+            viewMode,
+            runsCount: enhancedCharacter.mythic_plus_runs?.length || 0
         });
 
     } catch (error) {
@@ -915,36 +917,29 @@ async function handleViewModeChange(interaction, viewMode) {
         const gearData = await getGearData();
         const characterGear = gearData.find(gear => gear.name === selectedCharacter.name);
 
-        let filteredCharacter = selectedCharacter;
+        // Get available specs from database or message info
+        const availableSpecs = messageInfo?.availableSpecs || getAvailableSpecs(selectedCharacterName, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
-        // Apply spec filter if not "Overall"
-        if (currentSpec !== 'Overall') {
-            const { CombinedWowClient } = require('../services/combined-wow-client');
-            const client = new CombinedWowClient();
+        // Enhance character with database runs filtered by current spec
+        const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, currentSpec, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
-            const specRuns = await client.getSpecificRuns(selectedCharacterName, currentSpec);
-
-            if (specRuns && specRuns.length > 0) {
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: specRuns.map(run => ({
-                        dungeon: run.dungeon,
-                        mythic_level: run.mythic_level,
-                        score: run.map_rating || run.mythic_rating || 0,
-                        timed: run.is_completed_within_time ? 1 : 0
-                    }))
-                };
-            } else {
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: []
-                };
-            }
-        }
+        logger.debug('Character enhanced with database runs for view mode change', {
+            characterName: selectedCharacterName,
+            spec: currentSpec,
+            viewMode,
+            dbRunsCount: enhancedCharacter.mythic_plus_runs?.length || 0,
+            dataSource: enhancedCharacter.data_source
+        });
 
         // Generate the character image with the specified view mode
         const { generateCharacterImage } = require('../utils/character-image-generator');
-        const imageBuffer = await generateCharacterImage(filteredCharacter, characterGear, viewMode);
+        const imageBuffer = await generateCharacterImage(enhancedCharacter, characterGear, viewMode);
 
         // Create attachment and send
         const attachment = new AttachmentBuilder(imageBuffer, {
@@ -960,7 +955,8 @@ async function handleViewModeChange(interaction, viewMode) {
             viewMode,
             selectedCharacter.name,
             selectedCharacter.class,
-            currentSpec
+            currentSpec,
+            availableSpecs
         );
 
         await interaction.editReply({
@@ -979,7 +975,8 @@ async function handleViewModeChange(interaction, viewMode) {
                 type: 'character_image',
                 characterName: selectedCharacter.name,
                 viewMode: viewMode,
-                selectedSpec: currentSpec
+                selectedSpec: currentSpec,
+                availableSpecs
             });
         }
 
@@ -989,7 +986,7 @@ async function handleViewModeChange(interaction, viewMode) {
             viewMode,
             currentSpec,
             hasGearData: !!characterGear,
-            runsCount: filteredCharacter.mythic_plus_runs?.length || 0
+            runsCount: enhancedCharacter.mythic_plus_runs?.length || 0
         });
 
     } catch (error) {
@@ -1703,7 +1700,8 @@ async function handleCharacterImageWIP(interaction) {
             'compact',
             testCharacterData.name,
             testCharacterData.class,
-            'Overall'
+            'Overall',
+            []
         );
 
         await interaction.editReply({
@@ -1933,35 +1931,20 @@ async function updateCharacterImageMessage(client, messageId, messageInfo) {
         const viewMode = messageInfo.viewMode || 'compact';
         const selectedSpec = messageInfo.selectedSpec || 'Overall';
 
-        let filteredCharacter = selectedCharacter;
+        // Get available specs from database or message info
+        const availableSpecs = messageInfo.availableSpecs || getAvailableSpecs(messageInfo.characterName, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
-        // Apply spec filter if not "Overall"
-        if (selectedSpec !== 'Overall') {
-            const { CombinedWowClient } = require('../services/combined-wow-client');
-            const client = new CombinedWowClient();
-
-            const specRuns = await client.getSpecificRuns(messageInfo.characterName, selectedSpec);
-
-            if (specRuns && specRuns.length > 0) {
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: specRuns.map(run => ({
-                        dungeon: run.dungeon,
-                        mythic_level: run.mythic_level,
-                        score: run.map_rating || run.mythic_rating || 0,
-                        timed: run.is_completed_within_time ? 1 : 0
-                    }))
-                };
-            } else {
-                filteredCharacter = {
-                    ...selectedCharacter,
-                    mythic_plus_runs: []
-                };
-            }
-        }
+        // Enhance character with database runs filtered by selected spec
+        const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, selectedSpec, {
+            realm: 'thrall',
+            region: 'us'
+        });
 
         // Generate updated character image with stored view mode
-        const imageBuffer = await generateCharacterImage(filteredCharacter, characterGear, viewMode);
+        const imageBuffer = await generateCharacterImage(enhancedCharacter, characterGear, viewMode);
         const attachment = new AttachmentBuilder(imageBuffer, {
             name: `${messageInfo.characterName}-sheet.png`
         });
@@ -1975,7 +1958,8 @@ async function updateCharacterImageMessage(client, messageId, messageInfo) {
             viewMode,
             messageInfo.characterName,
             selectedCharacter.class,
-            selectedSpec
+            selectedSpec,
+            availableSpecs
         );
 
         // Update message with new image and components

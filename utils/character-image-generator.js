@@ -615,7 +615,7 @@ function drawMythicPlusRuns(ctx, characterData) {
     const sectionX = PADDING + 1000;
     const sectionY = PADDING + HEADER_HEIGHT + 40; // Just enough space for view mode buttons
     const sectionWidth = 930;
-    const sectionHeight = 760;
+    const sectionHeight = 800;
     const runHeight = 90; // Much more vertical space between entries
 
     // Draw section container
@@ -916,7 +916,7 @@ async function generateWeeklyMplusImage(mplusData, lastReset) {
         });
 
         // Create canvas with wider dimensions for weekly overview
-        const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+        const canvas = createCanvas(CANVAS_WIDTH+100, CANVAS_HEIGHT+200);
         const ctx = canvas.getContext('2d');
 
         // Set up the background

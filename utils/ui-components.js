@@ -13,6 +13,7 @@ const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } 
 const COMPONENT_IDS = {
     CHARACTER_SELECT: 'char_character_select',
     DUNGEON_SELECT: 'char_dungeon_select',
+    SPEC_SELECT: 'char_spec_select',
     REFRESH_DATA: 'char_refresh_data',
     MAIN_MENU: 'char_main_menu',
     RAID_DATA: 'char_raid_data',
@@ -26,7 +27,27 @@ const COMPONENT_IDS = {
 };
 
 /**
+ * Spec mappings by class for the spec filter dropdown
+ */
+const CLASS_SPECS = {
+    'Death Knight': ['Unholy', 'Frost', 'Blood'],
+    'Demon Hunter': ['Havoc', 'Vengeance'],
+    'Druid': ['Balance', 'Feral', 'Guardian', 'Restoration'],
+    'Evoker': ['Devastation', 'Preservation', 'Augmentation'],
+    'Hunter': ['Beast Mastery', 'Marksmanship', 'Survival'],
+    'Mage': ['Arcane', 'Fire', 'Frost'],
+    'Monk': ['Brewmaster', 'Windwalker', 'Mistweaver'],
+    'Paladin': ['Holy', 'Protection', 'Retribution'],
+    'Priest': ['Discipline', 'Holy', 'Shadow'],
+    'Rogue': ['Assassination', 'Outlaw', 'Subtlety'],
+    'Shaman': ['Elemental', 'Enhancement', 'Restoration'],
+    'Warlock': ['Affliction', 'Demonology', 'Destruction'],
+    'Warrior': ['Arms', 'Fury', 'Protection']
+};
+
+/**
  * Creates a character selection dropdown menu
+ * Sorted by M+ score (highest to lowest)
  * @param {Array} characters - Array of character objects with name property
  * @returns {StringSelectMenuBuilder} Discord select menu component
  */
@@ -35,8 +56,15 @@ function createCharacterSelectMenu(characters) {
         .setCustomId(COMPONENT_IDS.CHARACTER_SELECT)
         .setPlaceholder('Select a character for detailed view');
 
+    // Sort characters by M+ score (highest to lowest)
+    const sortedCharacters = [...characters].sort((a, b) => {
+        const scoreA = a.mythic_plus_score || 0;
+        const scoreB = b.mythic_plus_score || 0;
+        return scoreB - scoreA; // Descending order
+    });
+
     // Add character options to the menu
-    const options = characters.map(character => ({
+    const options = sortedCharacters.map(character => ({
         label: character.name,
         value: character.name,
         description: `View ${character.name}'s detailed dungeon runs`
@@ -66,6 +94,45 @@ function createDungeonSelectMenu(dungeons) {
             value: dungeon,
             description: `Compare all characters in ${dungeon}`
         }));
+
+    selectMenu.addOptions(options);
+    return selectMenu;
+}
+
+/**
+ * Creates a spec selection dropdown menu
+ * @param {string} characterClass - Character class to get specs for
+ * @param {Array<string>} availableSpecs - Specs that have data in the database
+ * @param {string} selectedSpec - Currently selected spec
+ * @returns {StringSelectMenuBuilder} Discord select menu component
+ */
+function createSpecSelectMenu(characterClass, availableSpecs = [], selectedSpec = 'Overall') {
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(COMPONENT_IDS.SPEC_SELECT)
+        .setPlaceholder('Filter by spec');
+
+    // Start with "Overall" option
+    const options = [{
+        label: 'Overall',
+        value: 'Overall',
+        description: 'Show all specs combined',
+        default: selectedSpec === 'Overall'
+    }];
+
+    // Add class-specific specs if available
+    const classSpecs = CLASS_SPECS[characterClass] || [];
+
+    // Only show specs that have data in the database
+    classSpecs.forEach(spec => {
+        if (availableSpecs.length === 0 || availableSpecs.includes(spec)) {
+            options.push({
+                label: spec,
+                value: spec,
+                description: `Show ${spec} runs only`,
+                default: selectedSpec === spec
+            });
+        }
+    });
 
     selectMenu.addOptions(options);
     return selectMenu;
@@ -230,9 +297,13 @@ function createMainMenuComponents(characters, dungeons) {
  * @param {Array} characters - Array of character objects for dropdown menu
  * @param {Set|Array} dungeons - Set or array of dungeon names for dropdown menu
  * @param {string} currentViewMode - Current view mode for styling buttons
+ * @param {string} characterName - Name of the character being viewed
+ * @param {string} characterClass - Class of the character being viewed
+ * @param {string} selectedSpec - Currently selected spec filter
+ * @param {Array<string>} availableSpecs - Specs that have runs in the database
  * @returns {Array} Array of ActionRowBuilder components
  */
-function createCharacterDetailComponents(includeRefresh = true, characters = [], dungeons = new Set(), currentViewMode = 'detailed', characterName = null) {
+function createCharacterDetailComponents(includeRefresh = true, characters = [], dungeons = new Set(), currentViewMode = 'detailed', characterName = null, characterClass = null, selectedSpec = 'Overall', availableSpecs = []) {
     const components = [];
 
     // Character selection row
@@ -240,6 +311,13 @@ function createCharacterDetailComponents(includeRefresh = true, characters = [],
         const characterRow = new ActionRowBuilder()
             .addComponents(createCharacterSelectMenu(characters));
         components.push(characterRow);
+    }
+
+    // Spec selection row (only if we have a character class)
+    if (characterClass) {
+        const specRow = new ActionRowBuilder()
+            .addComponents(createSpecSelectMenu(characterClass, availableSpecs, selectedSpec));
+        components.push(specRow);
     }
 
     // Dungeon selection row
@@ -433,6 +511,7 @@ module.exports = {
     COMPONENT_IDS,
     createCharacterSelectMenu,
     createDungeonSelectMenu,
+    createSpecSelectMenu,
     createRefreshButton,
     createMainMenuButton,
     createRaidStatsButton,
