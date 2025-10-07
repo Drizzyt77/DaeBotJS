@@ -9,6 +9,10 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+#Data files
+data
+*.md
+
 # Config files
 config.json
 .claude
