@@ -58,7 +58,7 @@ const {
     validateComponentData,
     COMPONENT_IDS
 } = require('../utils/ui-components');
-const { generateCharacterImage, generateWeeklyMplusImage } = require('../utils/character-image-generator');
+const { generateCharacterImage } = require('../utils/character-image-generator');
 const {
     createMainSummaryEmbed,
     createCharacterDetailEmbed,
@@ -1052,37 +1052,15 @@ async function handleWeeklyRunsMenu(interaction) {
         const dungeons = extractUniqueDungeons(characters);
         const components = createWeeklyMplusComponents(characters, dungeons);
 
-        try {
-            // Try to generate weekly M+ image
-            logger.info('Generating weekly M+ image for display');
-            const imageBuffer = await generateWeeklyMplusImage(mplusData, lastReset);
-            const attachment = new AttachmentBuilder(imageBuffer, {
-                name: 'weekly-mplus.png',
-                description: 'Weekly M+ Runs Summary'
-            });
+        // Display embed
+        const weeklyEmbed = createWeeklyMplusEmbed(mplusData, lastReset);
+        await interaction.update({
+            embeds: [weeklyEmbed],
+            files: [],
+            components
+        });
 
-            await interaction.update({
-                content: null,
-                embeds: [],
-                files: [attachment],
-                components
-            });
-
-            logger.info('Weekly M+ image display successful');
-
-        } catch (imageError) {
-            logger.warn('Failed to generate weekly M+ image, falling back to embed', {
-                error: imageError.message
-            });
-
-            // Fallback to embed display
-            const weeklyEmbed = createWeeklyMplusEmbed(mplusData, lastReset);
-            await interaction.update({
-                embeds: [weeklyEmbed],
-                files: [],
-                components
-            });
-        }
+        logger.info('Weekly M+ embed display successful');
 
         // Add to auto-refresh tracking as weekly M+ page
         if (interaction.message) {
@@ -1857,36 +1835,15 @@ async function updateWeeklyMplusMessage(client, messageId, messageInfo) {
         const dungeons = extractUniqueDungeons(characters);
         const components = createWeeklyMplusComponents(characters, dungeons);
 
-        try {
-            // Try to generate updated weekly M+ image
-            const imageBuffer = await generateWeeklyMplusImage(mplusData, lastReset);
-            const attachment = new AttachmentBuilder(imageBuffer, {
-                name: 'weekly-mplus.png',
-                description: 'Weekly M+ Runs Summary'
-            });
+        // Update message with embed
+        const embed = createWeeklyMplusEmbed(mplusData, lastReset);
+        await message.edit({
+            embeds: [embed],
+            files: [],
+            components
+        });
 
-            // Update message with new image and components
-            await message.edit({
-                content: null,
-                embeds: [],
-                files: [attachment],
-                components
-            });
-
-        } catch (imageError) {
-            logger.warn('Failed to generate weekly M+ image during auto-refresh, falling back to embed', {
-                error: imageError.message,
-                messageId
-            });
-
-            // Fallback to embed display
-            const embed = createWeeklyMplusEmbed(mplusData, lastReset);
-            await message.edit({
-                embeds: [embed],
-                files: [],
-                components
-            });
-        }
+        logger.info('Weekly M+ message auto-refresh successful', { messageId });
 
     } catch (error) {
         logger.error('Failed to update weekly M+ message', { messageId, error: error.message, stack: error.stack });
