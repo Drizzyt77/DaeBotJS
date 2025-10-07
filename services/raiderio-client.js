@@ -23,7 +23,7 @@ const RAIDERIO_CONFIG = {
  * Each endpoint requires specific fields to be requested from the API
  */
 const API_FIELDS = {
-    MYTHIC_PLUS: 'mythic_plus_best_runs',
+    MYTHIC_PLUS: 'mythic_plus_best_runs,mythic_plus_scores_by_season:current',
     RAID_PROGRESSION: 'raid_progression',
     RECENT_RUNS: 'mythic_plus_recent_runs',
     GEAR: 'gear,thumbnail_url'
@@ -191,10 +191,15 @@ class RaiderIOClient {
      * @returns {Object} Parsed mythic plus character data
      */
     parseMythicPlusData(rawData, characterName) {
+        // Get current season M+ score
+        const currentSeasonScores = rawData.mythic_plus_scores_by_season?.[0];
+        const mythicPlusScore = currentSeasonScores?.scores?.all || 0;
+
         return {
             name: rawData.name,
             class: rawData.class,
             role: rawData.active_spec_role,
+            mythic_plus_score: mythicPlusScore,
             mythic_plus_runs: (rawData.mythic_plus_best_runs || []).map(run => ({
                 dungeon: run.dungeon,
                 mythic_level: run.mythic_level,
