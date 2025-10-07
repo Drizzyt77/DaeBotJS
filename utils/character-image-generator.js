@@ -432,6 +432,14 @@ async function drawCharacterHeader(ctx, characterData, gearData) {
     const classText = `Level ${characterData.level || '??'} ${characterData.class || 'Unknown'}`;
     ctx.fillText(classText, PADDING + 40, headerY + 60);
 
+    // Selected spec display (centered below character info)
+    if (characterData.selected_spec) {
+        ctx.fillStyle = ACCENT_COLOR;
+        ctx.font = 'bold 45px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(characterData.selected_spec, CANVAS_WIDTH / 2, headerY + 30);
+    }
+
     // Item level (if available) - bigger text - increased by 15pt
     if (gearData?.item_level) {
         ctx.fillStyle = ACCENT_COLOR;
