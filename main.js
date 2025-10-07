@@ -13,6 +13,9 @@
  * - Character command auto-refresh initialization
  */
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const fs = require('fs');
 const { Collection } = require('discord.js');
 const path = require('node:path');
