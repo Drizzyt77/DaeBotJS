@@ -256,9 +256,10 @@ function findMostRelevantRaid(raidActivity) {
  * Calculates weekly run statistics for Mythic+ tracking
  * @param {Array} runs - Array of recent run objects with completed_at dates
  * @param {Date} lastReset - Date of the last weekly reset
+ * @param {string} characterName - Optional character name for resilient level calculation
  * @returns {Object} Statistics object with categorized run counts
  */
-function calculateWeeklyStats(runs, lastReset) {
+function calculateWeeklyStats(runs, lastReset, characterName = null) {
     const weeklyRuns = runs.filter(run => {
         const runDate = new Date(run.completed_at);
         return runDate >= lastReset;
@@ -283,29 +284,17 @@ function calculateWeeklyStats(runs, lastReset) {
         const highestUntimedLevel = untimedRuns.length > 0 ? Math.max(...untimedRuns.map(r => r.mythic_level)) : 0;
         const untimedDropLevel = highestUntimedLevel > 0 ? Math.max(2, highestUntimedLevel - 1) : 0;
 
-        // Calculate resilient keystone level (highest level where ALL dungeons are timed)
-        // Determine total dungeons dynamically from all runs this week
-        const allDungeonsInPool = new Set(weeklyRuns.map(run => run.dungeon));
-        const totalDungeonsInSeason = allDungeonsInPool.size;
-
+        // Calculate resilient keystone level from database
+        // This queries the database for the highest level where ALL dungeons are timed
         let resilientLevel = 0;
 
-        // Only calculate resilient if we have a reasonable sample size of dungeons
-        if (totalDungeonsInSeason > 0) {
-            // Group timed runs by level and count unique dungeons at each level
-            const timedRunsByLevel = {};
-            timedRuns.forEach(run => {
-                if (!timedRunsByLevel[run.mythic_level]) {
-                    timedRunsByLevel[run.mythic_level] = new Set();
-                }
-                timedRunsByLevel[run.mythic_level].add(run.dungeon);
-            });
-
-            // Find the highest level where we have all dungeons timed
-            for (const [level, dungeonSet] of Object.entries(timedRunsByLevel)) {
-                if (dungeonSet.size >= totalDungeonsInSeason) {
-                    resilientLevel = Math.max(resilientLevel, parseInt(level));
-                }
+        if (characterName) {
+            try {
+                const { calculateResilientLevel } = require('../services/run-query-service');
+                resilientLevel = calculateResilientLevel(characterName);
+            } catch (error) {
+                // If database query fails, resilient level remains 0
+                resilientLevel = 0;
             }
         }
 

@@ -163,6 +163,83 @@ function enhanceCharacterWithDBRuns(characterData, selectedSpec = null, options 
 }
 
 /**
+ * Calculate Resilient keystone level for a character
+ * Finds the highest level where ALL dungeons in the season are timed
+ * @param {string} characterName - Character name
+ * @param {Object} options - Query options
+ * @returns {number} Resilient level (0 if no resilient level found)
+ */
+function calculateResilientLevel(characterName, options = {}) {
+    const {
+        realm = 'thrall',
+        region = 'us',
+        season = CURRENT_SEASON
+    } = options;
+
+    try {
+        const db = getDatabase();
+
+        // Query to get the highest mythic level for each dungeon where the key was timed
+        const query = `
+            SELECT
+                r.dungeon,
+                MAX(CASE WHEN r.num_keystone_upgrades > 0 THEN r.mythic_level ELSE 0 END) as highest_timed_level
+            FROM mythic_runs r
+            INNER JOIN characters c ON r.character_id = c.id
+            WHERE c.name = ? AND c.realm = ? AND c.region = ?
+            ${season ? 'AND r.season = ?' : ''}
+            GROUP BY r.dungeon
+        `;
+
+        const params = [characterName, realm, region];
+        if (season) params.push(season);
+
+        const stmt = db.db.prepare(query);
+        const results = stmt.all(...params);
+
+        // If no runs found, return 0
+        if (results.length === 0) {
+            return 0;
+        }
+
+        // Get total unique dungeons in the season
+        const totalDungeons = results.length;
+
+        // Find the highest level where ALL dungeons have a timed run
+        // Start from the minimum highest_timed_level and work down
+        const timedLevels = results
+            .map(r => r.highest_timed_level)
+            .filter(level => level > 0);
+
+        if (timedLevels.length !== totalDungeons) {
+            // Not all dungeons have been timed, so no resilient level
+            return 0;
+        }
+
+        // The resilient level is the MINIMUM of all highest timed levels
+        // This represents the highest level where ALL dungeons are timed
+        const resilientLevel = Math.min(...timedLevels);
+
+        logger.debug('Calculated Resilient level', {
+            characterName,
+            totalDungeons,
+            timedDungeons: timedLevels.length,
+            resilientLevel,
+            dungeonLevels: results.map(r => ({ dungeon: r.dungeon, level: r.highest_timed_level }))
+        });
+
+        return resilientLevel;
+
+    } catch (error) {
+        logger.error('Failed to calculate resilient level', {
+            characterName,
+            error: error.message
+        });
+        return 0;
+    }
+}
+
+/**
  * Get run count by spec for a character
  * Useful for showing stats in the UI
  * @param {string} characterName - Character name
@@ -216,5 +293,6 @@ module.exports = {
     getBestRunsForUI,
     enhanceCharacterWithDBRuns,
     getRunCountsBySpec,
+    calculateResilientLevel,
     CURRENT_SEASON
 };
