@@ -396,8 +396,8 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
     // Sort characters within each role by weekly performance
     Object.keys(roleGroups).forEach(role => {
         roleGroups[role].sort((a, b) => {
-            const aStats = calculateWeeklyStats(a.recent_runs || [], lastReset);
-            const bStats = calculateWeeklyStats(b.recent_runs || [], lastReset);
+            const aStats = calculateWeeklyStats(a.recent_runs || [], lastReset, a.name);
+            const bStats = calculateWeeklyStats(b.recent_runs || [], lastReset, b.name);
 
             // Sort by ultra high level runs first, then high, mid, then total runs
             if (aStats.ultraHighTotal !== bStats.ultraHighTotal) return bStats.ultraHighTotal - aStats.ultraHighTotal;
@@ -411,7 +411,7 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
         if (roleGroups[role].length > 0) {
             const roleData = roleGroups[role]
                 .map(character => {
-                    const stats = calculateWeeklyStats(character.recent_runs || [], lastReset);
+                    const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
 
                     let result = `**${getClassIcon(character.class)}${character.name}**`;
 
@@ -466,7 +466,7 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
         let totalLowRuns = 0;
 
         allCharacters.forEach(character => {
-            const stats = calculateWeeklyStats(character.recent_runs || [], lastReset);
+            const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
             totalUltraHighRuns += stats.ultraHighTotal;
             totalHighRuns += stats.highTotal;
             totalMidRuns += stats.midTotal;
