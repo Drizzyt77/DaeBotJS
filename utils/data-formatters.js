@@ -271,6 +271,21 @@ function calculateWeeklyStats(runs, lastReset, characterName = null) {
     const midRuns = weeklyRuns.filter(run => run.mythic_level >= 10 && run.mythic_level <= 11);
     const lowRuns = weeklyRuns.filter(run => run.mythic_level <= 9);
 
+    // Calculate resilient keystone level from database
+    // This queries the database for the highest level where ALL dungeons are timed
+    // Calculate this OUTSIDE the weekly runs check so it works even with no runs this week
+    let resilientLevel = 0;
+
+    if (characterName) {
+        try {
+            const { calculateResilientLevel } = require('../services/run-query-service');
+            resilientLevel = calculateResilientLevel(characterName);
+        } catch (error) {
+            // If database query fails, resilient level remains 0
+            resilientLevel = 0;
+        }
+    }
+
     // Calculate weekly vault key level based on priority rules including Resilient Keystone
     let vaultKeyLevel = 2; // Default if no runs
 
@@ -284,20 +299,6 @@ function calculateWeeklyStats(runs, lastReset, characterName = null) {
         const highestUntimedLevel = untimedRuns.length > 0 ? Math.max(...untimedRuns.map(r => r.mythic_level)) : 0;
         const untimedDropLevel = highestUntimedLevel > 0 ? Math.max(2, highestUntimedLevel - 1) : 0;
 
-        // Calculate resilient keystone level from database
-        // This queries the database for the highest level where ALL dungeons are timed
-        let resilientLevel = 0;
-
-        if (characterName) {
-            try {
-                const { calculateResilientLevel } = require('../services/run-query-service');
-                resilientLevel = calculateResilientLevel(characterName);
-            } catch (error) {
-                // If database query fails, resilient level remains 0
-                resilientLevel = 0;
-            }
-        }
-
         // Apply priority rules - take the highest of all possible vault sources
         const vaultOptions = [
             2, // Default minimum
@@ -307,6 +308,9 @@ function calculateWeeklyStats(runs, lastReset, characterName = null) {
         ];
 
         vaultKeyLevel = Math.max(...vaultOptions);
+    } else {
+        // No runs this week - use resilient level if available
+        vaultKeyLevel = Math.max(2, resilientLevel);
     }
 
     // Count runs in each category (no more timed/untimed tracking)
