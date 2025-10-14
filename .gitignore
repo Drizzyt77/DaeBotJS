@@ -9,8 +9,10 @@ yarn-error.log*
 .env.local
 .env.*.local
 
-#Data files
-data
+# Data files
+
+# Debugging
+debugging
 
 # Config files
 config.json

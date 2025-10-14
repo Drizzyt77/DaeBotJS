@@ -2,9 +2,11 @@
  * Character Data Service
  * Provides high-level API for fetching various types of WoW character data
  * Uses the RaiderIO client service for all API interactions with improved error handling
+ * Falls back to local database when RaiderIO is unavailable
  */
 
 const { RaiderIOClient } = require('../services/raiderio-client');
+const { getRecentRunsFromDB, getMythicPlusDataFromDB } = require('../services/database-fallback');
 const logger = require('../utils/logger');
 
 // Initialize the RaiderIO API client
@@ -38,6 +40,7 @@ module.exports = {
     /**
      * Fetches mythic plus best runs data for all configured characters
      * Uses the character names from config.json to request data from RaiderIO API
+     * Falls back to database if RaiderIO is unavailable
      *
      * @returns {Promise<Array>} Array of character objects with mythic plus run data
      * @throws {Error} If character configuration cannot be loaded
@@ -60,10 +63,56 @@ module.exports = {
 
         try {
             const data = await raiderIOClient.getMythicPlusData(characterNames);
-            logger.info('Successfully fetched mythic plus data', { successCount: data.length, totalCount: characterNames.length });
+
+            // If RaiderIO returns incomplete results, fill in missing characters from database
+            if (data.length < characterNames.length) {
+                logger.warn('RaiderIO returned incomplete data, attempting database fallback for missing characters', {
+                    requestedCharacters: characterNames.length,
+                    receivedCharacters: data.length,
+                    missingCount: characterNames.length - data.length
+                });
+
+                try {
+                    // Find which characters are missing from RaiderIO response
+                    const receivedNames = data.map(char => char.name.toLowerCase());
+                    const missingNames = characterNames.filter(name => !receivedNames.includes(name.toLowerCase()));
+
+                    if (missingNames.length > 0) {
+                        logger.debug('Fetching missing characters from database', { missingNames });
+                        const dbData = getMythicPlusDataFromDB(missingNames);
+
+                        if (dbData.length > 0) {
+                            logger.info('Successfully fetched missing characters from database', {
+                                dbCount: dbData.length,
+                                totalCount: data.length + dbData.length
+                            });
+                            return [...data, ...dbData];
+                        }
+                    }
+                } catch (dbError) {
+                    logger.error('Database fallback failed for missing characters', { error: dbError.message });
+                }
+
+                logger.info('Returning partial RaiderIO data', { successCount: data.length, totalCount: characterNames.length });
+                return data;
+            }
+
+            logger.info('Successfully fetched mythic plus data from RaiderIO', { successCount: data.length, totalCount: characterNames.length });
             return data;
         } catch (error) {
-            logger.error('Failed to fetch character mythic plus data', { error: error.message });
+            logger.warn('RaiderIO API failed with error, attempting full database fallback', { error: error.message });
+
+            try {
+                const dbData = getMythicPlusDataFromDB(characterNames);
+                if (dbData.length > 0) {
+                    logger.info('Successfully fetched mythic plus data from database fallback', { count: dbData.length });
+                    return dbData;
+                }
+            } catch (dbError) {
+                logger.error('Database fallback also failed', { error: dbError.message });
+            }
+
+            logger.error('Both RaiderIO and database failed for mythic plus data');
             return [];
         }
     },
@@ -105,6 +154,7 @@ module.exports = {
      * Fetches recent mythic plus runs data for all configured characters
      * Retrieves the most recent dungeon runs completed by each character
      * Used for weekly activity tracking and performance analysis
+     * Falls back to database if RaiderIO is unavailable
      *
      * @returns {Promise<Array>} Array of character objects with recent run data
      * @throws {Error} If character configuration cannot be loaded
@@ -131,10 +181,56 @@ module.exports = {
 
         try {
             const data = await raiderIOClient.getRecentRunsData(characterNames);
-            logger.info('Successfully fetched M+ data', { successCount: data.length, totalCount: characterNames.length });
+
+            // If RaiderIO returns incomplete results, fill in missing characters from database
+            if (data.length < characterNames.length) {
+                logger.warn('RaiderIO returned incomplete data, attempting database fallback for missing characters', {
+                    requestedCharacters: characterNames.length,
+                    receivedCharacters: data.length,
+                    missingCount: characterNames.length - data.length
+                });
+
+                try {
+                    // Find which characters are missing from RaiderIO response
+                    const receivedNames = data.map(char => char.name.toLowerCase());
+                    const missingNames = characterNames.filter(name => !receivedNames.includes(name.toLowerCase()));
+
+                    if (missingNames.length > 0) {
+                        logger.debug('Fetching missing characters from database', { missingNames });
+                        const dbData = getRecentRunsFromDB(missingNames);
+
+                        if (dbData.length > 0) {
+                            logger.info('Successfully fetched missing characters from database', {
+                                dbCount: dbData.length,
+                                totalCount: data.length + dbData.length
+                            });
+                            return [...data, ...dbData];
+                        }
+                    }
+                } catch (dbError) {
+                    logger.error('Database fallback failed for missing characters', { error: dbError.message });
+                }
+
+                logger.info('Returning partial RaiderIO data', { successCount: data.length, totalCount: characterNames.length });
+                return data;
+            }
+
+            logger.info('Successfully fetched M+ data from RaiderIO', { successCount: data.length, totalCount: characterNames.length });
             return data;
         } catch (error) {
-            logger.error('Failed to fetch character M+ data', { error: error.message });
+            logger.warn('RaiderIO API failed with error, attempting full database fallback', { error: error.message });
+
+            try {
+                const dbData = getRecentRunsFromDB(characterNames);
+                if (dbData.length > 0) {
+                    logger.info('Successfully fetched M+ data from database fallback', { count: dbData.length });
+                    return dbData;
+                }
+            } catch (dbError) {
+                logger.error('Database fallback also failed', { error: dbError.message });
+            }
+
+            logger.error('Both RaiderIO and database failed for recent runs data');
             return [];
         }
     },

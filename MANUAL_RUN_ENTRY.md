@@ -35,7 +35,7 @@ Add one run at a time with a simple form.
 - `spec` - Specialization name (e.g., "Blood", "Unholy")
 - `result` - Timed (+1, +2, +3) or Depleted
 - `date` - Date completed (YYYY-MM-DD or MM/DD/YYYY)
-- `score` - Run score (required for accuracy)
+- `score` - Run score (REQUIRED - must be manually entered, no auto-calculation)
 
 **Optional Fields:**
 - `season` - Season identifier (defaults to current)
@@ -107,7 +107,8 @@ Open the JSON file and add your runs:
     "level": 15,
     "spec": "Blood",
     "result": "+2",
-    "date": "2024-12-15"
+    "date": "2024-12-15",
+    "score": 225.0
   },
   {
     "character": "Daemourne",
@@ -124,7 +125,8 @@ Open the JSON file and add your runs:
     "level": 16,
     "spec": "Windwalker",
     "result": "depleted",
-    "date": "2024-12-13"
+    "date": "2024-12-13",
+    "score": 160.0
   }
 ]
 ```
@@ -162,7 +164,7 @@ Summary:
 }
 ```
 
-**Note:** Score is optional for import (will be auto-calculated), but recommended for accuracy.
+**Note:** Score is REQUIRED and must be manually entered. Get accurate scores from Raider.IO or in-game sources.
 
 **Other Optional Fields:**
 ```json
@@ -236,24 +238,24 @@ Season 3.5 TWW Dungeons:
 
 ---
 
-## Score Calculation
+## Finding Run Scores
 
-If you don't provide a score, it's auto-calculated:
+The `score` field is REQUIRED and must be manually entered. You can find accurate run scores from:
 
-**Formula:**
-```
-score = level * 10 * multiplier
-```
+### 1. Raider.IO Website
+- Go to your character's profile on Raider.IO
+- View your run history
+- Each run displays its score
 
-**Multipliers:**
-- Timed (+1, +2, +3): 1.5x
-- Depleted: 1.0x
+### 2. In-Game Details! Addon
+- View your Mythic+ run history in Details!
+- Scores are shown for each completed run
 
-**Examples:**
-- +15 timed: `15 * 10 * 1.5 = 225`
-- +20 depleted: `20 * 10 * 1.0 = 200`
+### 3. In-Game Mythic+ Tab
+- Open your Mythic+ tab (Shift+J)
+- View run history for scores
 
-For more accurate scores, provide the `score` field from Raider.IO or Details!.
+**Note:** Do not estimate or calculate scores manually. Use actual scores from these sources for accurate tracking.
 
 ---
 
@@ -363,6 +365,7 @@ Check your Raider.IO profile, Details! addon, or screenshots for runs you want t
     "spec": "Blood",
     "result": "+2",
     "date": "2024-11-15",
+    "score": 270.0,
     "season": "season-tww-2"
   },
   {
@@ -372,6 +375,7 @@ Check your Raider.IO profile, Details! addon, or screenshots for runs you want t
     "spec": "Blood",
     "result": "+3",
     "date": "2024-11-10",
+    "score": 255.0,
     "season": "season-tww-2"
   }
 ]

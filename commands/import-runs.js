@@ -56,7 +56,8 @@ function generateExampleJSON() {
             level: 15,
             spec: "Blood",
             result: "+2",
-            date: "2024-12-15"
+            date: "2024-12-15",
+            score: 225.0
         },
         {
             character: "Daemourne",
@@ -73,7 +74,8 @@ function generateExampleJSON() {
             level: 16,
             spec: "Windwalker",
             result: "depleted",
-            date: "2024-12-13"
+            date: "2024-12-13",
+            score: 160.0
         }
     ], null, 2);
 }
@@ -122,7 +124,7 @@ Download the attached JSON file and fill in your runs.
   "spec": "Spec Name",
   "result": "+1", "+2", "+3", or "depleted",
   "date": "YYYY-MM-DD",
-  "score": 280.5 (optional)
+  "score": 280.5 (REQUIRED - must be manually entered)
 }
 \`\`\`
 
@@ -202,10 +204,23 @@ Download the attached JSON file and fill in your runs.
                 const run = runs[i];
 
                 try {
-                    // Validate required fields
-                    if (!run.character || !run.dungeon || !run.level || !run.spec || !run.result || !run.date) {
-                        results.errors.push(`Run ${i + 1}: Missing required fields`);
+                    // Validate required fields (allow 0 as valid value for result and score)
+                    if (!run.character || !run.dungeon || !run.level || !run.spec ||
+                        run.result === undefined || run.result === null ||
+                        !run.date || run.score === undefined || run.score === null) {
+                        results.errors.push(`Run ${i + 1}: Missing required fields (character, dungeon, level, spec, result, date, score)`);
                         continue;
+                    }
+
+                    // Normalize result field (handle CSV conversion of "+2" to 2)
+                    if (typeof run.result === 'number') {
+                        // If it's a positive number, add the + prefix
+                        if (run.result > 0 && run.result <= 3) {
+                            run.result = `+${run.result}`;
+                        } else if (run.result === 0) {
+                            // 0 typically means depleted
+                            run.result = 'depleted';
+                        }
                     }
 
                     // Parse date
@@ -221,9 +236,6 @@ Download the attached JSON file and fill in your runs.
                     // Parse result
                     const isTimed = run.result !== 'depleted';
                     const numUpgrades = run.result === '+3' ? 3 : run.result === '+2' ? 2 : run.result === '+1' ? 1 : 0;
-
-                    // Calculate score if not provided
-                    const calculatedScore = run.score || (run.level * 10 * (isTimed ? 1.5 : 1.0));
 
                     // Upsert character
                     const characterId = db.upsertCharacter({
@@ -243,7 +255,7 @@ Download the attached JSON file and fill in your runs.
                         duration: run.duration || 0,
                         keystone_run_id: null,
                         is_completed_within_time: isTimed,
-                        score: calculatedScore,
+                        score: run.score,
                         num_keystone_upgrades: numUpgrades,
                         spec_name: run.spec,
                         spec_role: specRole,

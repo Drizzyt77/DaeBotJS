@@ -268,6 +268,12 @@ function getCharacterLinks() {
  */
 async function showMainMenu(interaction, isInitialReply = false, forceRefresh = false) {
     try {
+        // Note: interaction should already be deferred by handleCharacterInteraction
+        // This is just a safety check
+        if (!isInitialReply && !interaction.deferred && !interaction.replied) {
+            await interaction.deferUpdate();
+        }
+
         // Fetch character data
         const characters = await getCharacterData(forceRefresh);
 
@@ -285,6 +291,8 @@ async function showMainMenu(interaction, isInitialReply = false, forceRefresh = 
 
             if (isInitialReply) {
                 await interaction.reply(messageOptions);
+            } else if (interaction.deferred) {
+                await interaction.editReply(messageOptions);
             } else {
                 await interaction.update(messageOptions);
             }
@@ -308,6 +316,8 @@ async function showMainMenu(interaction, isInitialReply = false, forceRefresh = 
 
             if (isInitialReply) {
                 await interaction.reply(messageOptions);
+            } else if (interaction.deferred) {
+                await interaction.editReply(messageOptions);
             } else {
                 await interaction.update(messageOptions);
             }
@@ -344,6 +354,18 @@ async function showMainMenu(interaction, isInitialReply = false, forceRefresh = 
             });
             logger.debug('Stored main menu message for auto-refresh', { messageId: message.id });
 
+        } else if (interaction.deferred) {
+            await interaction.editReply(messageOptions);
+
+            // Update auto-refresh tracking
+            if (interaction.message) {
+                activeMessages.set(interaction.message.id, {
+                    channelId: interaction.channel.id,
+                    messageId: interaction.message.id,
+                    userId: interaction.user.id,
+                    type: 'main_menu'
+                });
+            }
         } else {
             await interaction.update(messageOptions);
 
@@ -372,10 +394,12 @@ async function showMainMenu(interaction, isInitialReply = false, forceRefresh = 
                     embeds: [errorEmbed],
                     flags: MessageFlags.Ephemeral
                 });
-            } else if (!isInitialReply) {
-                await interaction.update({ embeds: [errorEmbed] });
+            } else if (interaction.deferred) {
+                await interaction.editReply({ embeds: [errorEmbed], components: [] });
+            } else if (!isInitialReply && !interaction.replied) {
+                await interaction.update({ embeds: [errorEmbed], components: [] });
             } else {
-                await interaction.editReply({ embeds: [errorEmbed] });
+                await interaction.editReply({ embeds: [errorEmbed], components: [] });
             }
         } catch (replyError) {
             console.error('Failed to send error message:', replyError);
@@ -496,9 +520,6 @@ async function handleCharacterSelectText(interaction, characters) {
  */
 async function handleCharacterSelect(interaction, characters) {
     try {
-        // Defer update since image generation can take time
-        await interaction.deferUpdate();
-
         // Remove from auto-refresh tracking
         if (interaction.message) {
             activeMessages.delete(interaction.message.id);
@@ -693,11 +714,7 @@ async function handleCharacterSelect(interaction, characters) {
                 []
             );
 
-            if (interaction.deferred) {
-                await interaction.editReply({ embeds: [errorEmbed], components });
-            } else {
-                await interaction.update({ embeds: [errorEmbed], components });
-            }
+            await interaction.editReply({ embeds: [errorEmbed], components });
         }
     }
 }
@@ -720,7 +737,7 @@ async function handleDungeonSelect(interaction, characters) {
         const dungeonEmbed = createDungeonComparisonEmbed(selectedDungeon, characters);
         const components = createDungeonComparisonComponents(true);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [dungeonEmbed],
             components
         });
@@ -730,7 +747,7 @@ async function handleDungeonSelect(interaction, characters) {
         const errorEmbed = createErrorEmbed('Failed to load dungeon comparison.');
         const components = createDungeonComparisonComponents(false);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [errorEmbed],
             components
         });
@@ -744,9 +761,6 @@ async function handleDungeonSelect(interaction, characters) {
  */
 async function handleSpecSelect(interaction, characters) {
     try {
-        // Defer update since image generation can take time
-        await interaction.deferUpdate();
-
         const selectedSpec = interaction.values[0];
 
         // Get character name from active message tracking
@@ -861,9 +875,6 @@ async function handleSpecSelect(interaction, characters) {
  */
 async function handleViewModeChange(interaction, viewMode) {
     try {
-        // Defer update since image generation can take time
-        await interaction.deferUpdate();
-
         // Get current message info before removing from tracking
         const messageInfo = activeMessages.get(interaction.message?.id);
         const currentSpec = messageInfo?.selectedSpec || 'Overall';
@@ -1021,7 +1032,7 @@ async function handleRaidMenu(interaction) {
         const raidEmbed = createRaidProgressionEmbed(raidData);
         const components = createRaidStatsComponents();
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [raidEmbed],
             components
         });
@@ -1031,7 +1042,7 @@ async function handleRaidMenu(interaction) {
         const errorEmbed = createErrorEmbed('Failed to load raid progression data.');
         const components = createRaidStatsComponents();
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [errorEmbed],
             components
         });
@@ -1054,7 +1065,7 @@ async function handleWeeklyRunsMenu(interaction) {
 
         // Display embed
         const weeklyEmbed = createWeeklyMplusEmbed(mplusData, lastReset);
-        await interaction.update({
+        await interaction.editReply({
             embeds: [weeklyEmbed],
             files: [],
             components
@@ -1082,7 +1093,7 @@ async function handleWeeklyRunsMenu(interaction) {
             const dungeons = extractUniqueDungeons(characters);
             const components = createWeeklyMplusComponents(characters, dungeons);
 
-            await interaction.update({
+            await interaction.editReply({
                 embeds: [errorEmbed],
                 files: [],
                 components
@@ -1090,7 +1101,7 @@ async function handleWeeklyRunsMenu(interaction) {
         } catch (fallbackError) {
             // If we can't get character data, show minimal components
             const components = createWeeklyMplusComponents();
-            await interaction.update({
+            await interaction.editReply({
                 embeds: [errorEmbed],
                 files: [],
                 components
@@ -1117,7 +1128,7 @@ async function handleLinksMenu(interaction) {
 
         const components = createRaidStatsComponents(); // Reuse for back button
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [embed],
             components
         });
@@ -1125,7 +1136,7 @@ async function handleLinksMenu(interaction) {
     } catch (error) {
         logger.error('Error in handleLinksMenu', { error: error.message, stack: error.stack });
         const errorEmbed = createErrorEmbed('Failed to load character links.');
-        await interaction.update({ embeds: [errorEmbed] });
+        await interaction.editReply({ embeds: [errorEmbed] });
     }
 }
 
@@ -1168,7 +1179,7 @@ async function handleNotesPage(interaction, filter = 'all') {
         // Create components
         const components = createNotesPageComponents(notes, filter);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [embed],
             components
         });
@@ -1183,7 +1194,7 @@ async function handleNotesPage(interaction, filter = 'all') {
     } catch (error) {
         logger.error('Error in handleNotesPage', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('display notes', error.message);
-        await interaction.update({ embeds: [errorEmbed] });
+        await interaction.editReply({ embeds: [errorEmbed] });
     }
 }
 
@@ -1205,14 +1216,14 @@ async function handleNoteSelection(interaction) {
 
         if (!selectedNote) {
             const errorEmbed = createNoteErrorEmbed('find note', 'The selected note could not be found.');
-            await interaction.update({ embeds: [errorEmbed] });
+            await interaction.editReply({ embeds: [errorEmbed] });
             return;
         }
 
         const embed = createNoteDetailEmbed(selectedNote, interaction.guild?.name);
         const components = createSelectedNoteComponents(selectedNote);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [embed],
             components
         });
@@ -1226,7 +1237,7 @@ async function handleNoteSelection(interaction) {
     } catch (error) {
         logger.error('Error in handleNoteSelection', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('select note', error.message);
-        await interaction.update({ embeds: [errorEmbed] });
+        await interaction.editReply({ embeds: [errorEmbed] });
     }
 }
 
@@ -1262,7 +1273,7 @@ async function handleEditNote(interaction) {
 
         if (!noteId || noteId === NOTES_COMPONENT_IDS.EDIT_NOTE) {
             const errorEmbed = createNoteErrorEmbed('edit note', 'Please select a note first using the dropdown menu.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1272,7 +1283,7 @@ async function handleEditNote(interaction) {
 
         if (!note) {
             const errorEmbed = createNoteErrorEmbed('edit note', 'The selected note could not be found.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1288,7 +1299,7 @@ async function handleEditNote(interaction) {
     } catch (error) {
         logger.error('Error in handleEditNote', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('edit note', error.message);
-        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
 }
 
@@ -1303,7 +1314,7 @@ async function handleDeleteNote(interaction) {
 
         if (!noteId || noteId === NOTES_COMPONENT_IDS.DELETE_NOTE) {
             const errorEmbed = createNoteErrorEmbed('delete note', 'Please select a note first using the dropdown menu.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1312,7 +1323,7 @@ async function handleDeleteNote(interaction) {
 
         if (!deleted) {
             const errorEmbed = createNoteErrorEmbed('delete note', 'The selected note could not be found or deleted.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1328,7 +1339,7 @@ async function handleDeleteNote(interaction) {
     } catch (error) {
         logger.error('Error in handleDeleteNote', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('delete note', error.message);
-        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
 }
 
@@ -1343,7 +1354,7 @@ async function handleCompleteNote(interaction) {
 
         if (!noteId || noteId === NOTES_COMPONENT_IDS.COMPLETE_NOTE) {
             const errorEmbed = createNoteErrorEmbed('complete note', 'Please select a note first using the dropdown menu.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1353,7 +1364,7 @@ async function handleCompleteNote(interaction) {
 
         if (!completedNote) {
             const errorEmbed = createNoteErrorEmbed('complete note', 'The selected note could not be found or completed.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1361,7 +1372,7 @@ async function handleCompleteNote(interaction) {
         const embed = createNoteDetailEmbed(completedNote, interaction.guild?.name);
         const components = createSelectedNoteComponents(completedNote);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [embed],
             components
         });
@@ -1375,7 +1386,7 @@ async function handleCompleteNote(interaction) {
     } catch (error) {
         logger.error('Error in handleCompleteNote', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('complete note', error.message);
-        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
 }
 
@@ -1390,7 +1401,7 @@ async function handleUncompleteNote(interaction) {
 
         if (!noteId || noteId === NOTES_COMPONENT_IDS.UNCOMPLETE_NOTE) {
             const errorEmbed = createNoteErrorEmbed('uncomplete note', 'Please select a note first using the dropdown menu.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1399,7 +1410,7 @@ async function handleUncompleteNote(interaction) {
 
         if (!uncompletedNote) {
             const errorEmbed = createNoteErrorEmbed('uncomplete note', 'The selected note could not be found or uncompleted.');
-            await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+            await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -1407,7 +1418,7 @@ async function handleUncompleteNote(interaction) {
         const embed = createNoteDetailEmbed(uncompletedNote, interaction.guild?.name);
         const components = createSelectedNoteComponents(uncompletedNote);
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [embed],
             components
         });
@@ -1421,7 +1432,7 @@ async function handleUncompleteNote(interaction) {
     } catch (error) {
         logger.error('Error in handleUncompleteNote', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('uncomplete note', error.message);
-        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
 }
 
@@ -1443,7 +1454,7 @@ async function handleNotesFilter(interaction) {
     } catch (error) {
         logger.error('Error in handleNotesFilter', { error: error.message, stack: error.stack });
         const errorEmbed = createNoteErrorEmbed('filter notes', error.message);
-        await interaction.update({ embeds: [errorEmbed] });
+        await interaction.editReply({ embeds: [errorEmbed] });
     }
 }
 
@@ -1984,6 +1995,12 @@ module.exports = {
      */
     handleCharacterInteraction: async function(interaction) {
         try {
+            // Defer interaction IMMEDIATELY to prevent timeout
+            // Must happen before any data fetching
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferUpdate();
+            }
+
             // Get current character data for interactions
             const characters = await getCharacterData(false);
 

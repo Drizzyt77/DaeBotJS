@@ -199,13 +199,14 @@ class BlizzardClient {
 
         const realmSlug = realm.toLowerCase().replace(/'/g, '').replace(/\s+/g, '-');
         const charNameLower = characterName.toLowerCase();
-        const endpoint = `/profile/wow/character/${realmSlug}/${charNameLower}/mythic-keystone-profile`;
+        const endpoint = `/profile/wow/character/${realmSlug}/${charNameLower}/mythic-keystone-profile/season/${seasonId}`;
         const namespace = `profile-${region}`;
 
         logger.debug('Fetching Blizzard current season profile', {
             characterName,
             realm: realmSlug,
-            season: seasonId
+            season: seasonId,
+            endpoint
         });
 
         return await this.makeRequest(endpoint, namespace);
@@ -225,8 +226,8 @@ class BlizzardClient {
             return specMap;
         }
 
-        // Get best runs from either current_period or direct best_runs property
-        const bestRuns = seasonProfile.current_period?.best_runs || seasonProfile.best_runs;
+        // Get best runs from either direct best_runs property or current_period
+        const bestRuns = seasonProfile.best_runs || seasonProfile.current_period?.best_runs;
 
         if (!bestRuns || !Array.isArray(bestRuns)) {
             logger.warn('No best runs found in Blizzard profile', {

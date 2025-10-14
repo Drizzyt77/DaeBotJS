@@ -14,6 +14,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { RaiderIOClient } = require('../services/raiderio-client');
+const { getCharacterFromDB } = require('../services/database-fallback');
 const weeklyHelper = require('../helpers/weekly');
 const { getTimedSymbol, getClassIcon, getRoleIcon } = require('../utils/data-formatters');
 const logger = require('../utils/logger');
@@ -171,28 +172,61 @@ module.exports = {
 
             logger.debug('Looking up character', { character: normalizedCharacter, realm: normalizedRealm });
 
-            // Fetch recent runs data from RaiderIO
-            // Note: Current RaiderIO client is hardcoded to US/Thrall - we'll create a custom request
-            const url = raiderIOClient.buildApiUrl(normalizedCharacter, 'mythic_plus_recent_runs', 'us', normalizedRealm);
-            const rawData = await raiderIOClient.makeRequest(url, normalizedCharacter);
-            const characterData = rawData ? [raiderIOClient.parseRecentRunsData(rawData, normalizedCharacter)] : [];
+            let character = null;
+            let dataSource = 'raiderio';
 
-            if (characterData.length === 0) {
+            // Try RaiderIO first
+            try {
+                const url = raiderIOClient.buildApiUrl(normalizedCharacter, 'mythic_plus_recent_runs', 'us', normalizedRealm);
+                const rawData = await raiderIOClient.makeRequest(url, normalizedCharacter);
+
+                if (rawData) {
+                    character = raiderIOClient.parseRecentRunsData(rawData, normalizedCharacter);
+                    dataSource = 'raiderio';
+                    logger.info('Successfully fetched character from RaiderIO', { character: normalizedCharacter });
+                }
+            } catch (rioError) {
+                logger.warn('RaiderIO fetch failed, trying database fallback', {
+                    character: normalizedCharacter,
+                    error: rioError.message
+                });
+            }
+
+            // Fallback to database if RaiderIO failed
+            if (!character) {
+                const dbData = getCharacterFromDB(normalizedCharacter, {
+                    realm: normalizedRealm,
+                    region: 'us'
+                });
+
+                if (dbData) {
+                    character = {
+                        name: dbData.name,
+                        class: dbData.class,
+                        role: dbData.active_spec_role,
+                        recent_runs: dbData.recent_runs
+                    };
+                    dataSource = 'database';
+                    logger.info('Successfully fetched character from database', { character: normalizedCharacter });
+                }
+            }
+
+            // If both sources failed
+            if (!character) {
                 const errorEmbed = createErrorEmbed(
                     'Character Not Found',
                     `Could not find character **${normalizedCharacter}** on realm **${normalizedRealm}**.\n\n` +
                     `Please check:\n` +
                     `• Character name spelling\n` +
                     `• Realm name (use hyphens for spaces: "Area-52")\n` +
-                    `• Character has completed Mythic+ dungeons recently`,
+                    `• Character has completed Mythic+ dungeons recently\n\n` +
+                    `💡 _Note: RaiderIO may be experiencing issues. Data will be shown from local database when available._`,
                     EMBED_COLORS.WARNING
                 );
 
                 await interaction.editReply({ embeds: [errorEmbed] });
                 return;
             }
-
-            const character = characterData[0];
             const recentRuns = character.recent_runs || [];
 
             if (recentRuns.length === 0) {
@@ -216,8 +250,11 @@ module.exports = {
             // Create main embed
             const embed = new EmbedBuilder()
                 .setTitle(`${getClassIcon(character.class)} ${character.name} - Key Tracker`)
-                .setDescription(`${getRoleIcon(character.role)} **${character.class}** on **${normalizedRealm}**`)
-                .setColor(EMBED_COLORS.SUCCESS)
+                .setDescription(
+                    `${getRoleIcon(character.role)} **${character.class}** on **${normalizedRealm}**\n` +
+                    (dataSource === 'database' ? `⚠️ _Data from local database (RaiderIO unavailable)_` : '')
+                )
+                .setColor(dataSource === 'database' ? EMBED_COLORS.WARNING : EMBED_COLORS.SUCCESS)
                 .setTimestamp();
 
             // Add current week runs
