@@ -393,11 +393,18 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
     // Process weekly statistics for each character
     const roleGroups = groupCharactersByRole(mplusData);
 
+    // Cache stats for all characters to avoid recalculating during sort and display
+    const statsCache = new Map();
+    mplusData.forEach(character => {
+        const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
+        statsCache.set(character.name, stats);
+    });
+
     // Sort characters within each role by weekly performance
     Object.keys(roleGroups).forEach(role => {
         roleGroups[role].sort((a, b) => {
-            const aStats = calculateWeeklyStats(a.recent_runs || [], lastReset, a.name);
-            const bStats = calculateWeeklyStats(b.recent_runs || [], lastReset, b.name);
+            const aStats = statsCache.get(a.name);
+            const bStats = statsCache.get(b.name);
 
             // Sort by ultra high level runs first, then high, mid, then total runs
             if (aStats.ultraHighTotal !== bStats.ultraHighTotal) return bStats.ultraHighTotal - aStats.ultraHighTotal;
@@ -411,7 +418,7 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
         if (roleGroups[role].length > 0) {
             const roleData = roleGroups[role]
                 .map(character => {
-                    const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
+                    const stats = statsCache.get(character.name);
 
                     let result = `**${getClassIcon(character.class)}${character.name}**`;
 
@@ -435,10 +442,13 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
                     // If no runs this week
                     if (stats.allWeeklyRuns === 0) {
                         result += `\nNo runs this week`;
-                    }
 
-                    // Show next week's vault key level (only if runs were completed)
-                    if (stats.allWeeklyRuns > 0) {
+                        // Still show resilient vault key if they have it (12+)
+                        if (stats.vaultKeyLevel >= 12) {
+                            result += `\n:warning: Next week: +${stats.vaultKeyLevel}`;
+                        }
+                    } else {
+                        // Show next week's vault key level with checkmark/X for runs completed this week
                         const emoji = stats.vaultKeyLevel >= 12 ? '✅' : '❌';
                         result += `\n${emoji} Next week: +${stats.vaultKeyLevel}`;
                     }
@@ -458,15 +468,13 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
     // Add weekly summary statistics
     const allCharacters = Object.values(roleGroups).flat();
     if (allCharacters.length > 0) {
-        const { calculateWeeklyStats } = require('./data-formatters');
-
         let totalUltraHighRuns = 0;
         let totalHighRuns = 0;
         let totalMidRuns = 0;
         let totalLowRuns = 0;
 
         allCharacters.forEach(character => {
-            const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
+            const stats = statsCache.get(character.name);
             totalUltraHighRuns += stats.ultraHighTotal;
             totalHighRuns += stats.highTotal;
             totalMidRuns += stats.midTotal;
