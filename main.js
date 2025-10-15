@@ -143,6 +143,17 @@ process.on('SIGINT', () => {
 
         logger.info('Character command cleanup completed');
 
+        // Cleanup token tracker service
+        if (client.tokenTracker) {
+            client.tokenTracker.stop();
+            logger.info('Token tracker cleanup completed');
+        }
+
+        // Close token database connection
+        const { closeTokenDatabase } = require('./database/token-db');
+        closeTokenDatabase();
+        logger.info('Token database connection closed');
+
         // Destroy the Discord client connection
         client.destroy();
         logger.info('Discord client connection terminated');

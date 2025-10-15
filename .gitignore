@@ -17,6 +17,7 @@ debugging
 # Config files
 config.json
 .claude
+data
 
 # Logs
 logs/

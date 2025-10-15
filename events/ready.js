@@ -55,6 +55,21 @@ module.exports = {
             logger.error('Failed to initialize auto-refresh system', { error: error.message });
         }
 
+        // Initialize WoW token price tracking service
+        // This monitors token prices and sends notifications when threshold is exceeded
+        try {
+            const { TokenTracker } = require('../services/token-tracker');
+            const tokenTracker = new TokenTracker(client);
+            tokenTracker.start();
+
+            // Store tracker instance on client for cleanup
+            client.tokenTracker = tokenTracker;
+
+            logger.info('WoW token price tracker initialized');
+        } catch (error) {
+            logger.error('Failed to initialize token tracker', { error: error.message });
+        }
+
         // Log guild information
         const guildInfo = [];
         client.guilds.cache.forEach(guild => {
