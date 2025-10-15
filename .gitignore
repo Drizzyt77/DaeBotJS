@@ -17,7 +17,6 @@ debugging
 # Config files
 config.json
 .claude
-data
 
 # Logs
 logs/
@@ -39,3 +38,4 @@ coverage/
 .idea/
 *.sublime-workspace
 *.sublime-project
+data/
