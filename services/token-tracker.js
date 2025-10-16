@@ -171,15 +171,25 @@ class TokenTracker {
 
             // Only send notifications if:
             // 1. Price is at or above threshold
-            // 2. Price is different from previous price (or no previous price)
-            const shouldNotify = price >= threshold &&
-                (!previousPrice || previousPrice.price !== price);
+            // 2. Price has crossed a 5k boundary (315k, 320k, 325k, etc.)
+            const BRACKET_SIZE = 5000;
+
+            // Calculate which 5k bracket each price falls into
+            const currentBracket = Math.floor(price / BRACKET_SIZE);
+            const previousBracket = previousPrice ? Math.floor(previousPrice.price / BRACKET_SIZE) : null;
+
+            // Only notify if we've crossed into a different 5k bracket
+            const hasCrossedBracket = !previousPrice || currentBracket !== previousBracket;
+
+            const shouldNotify = price >= threshold && hasCrossedBracket;
 
             if (shouldNotify) {
                 logger.info('Sending token price notifications', {
                     price,
                     threshold,
-                    priceChange: previousPrice ? price - previousPrice.price : 0
+                    priceChange: previousPrice ? price - previousPrice.price : 0,
+                    currentBracket: currentBracket * BRACKET_SIZE,
+                    previousBracket: previousBracket ? previousBracket * BRACKET_SIZE : 'none'
                 });
 
                 await this.sendNotifications(price, previousPrice?.price || null, threshold);
@@ -188,6 +198,13 @@ class TokenTracker {
                     logger.info('Price below threshold, no notification sent', {
                         price,
                         threshold
+                    });
+                } else if (previousPrice && !hasCrossedBracket) {
+                    logger.info('Price has not crossed 5k bracket, no notification sent', {
+                        price,
+                        previousPrice: previousPrice.price,
+                        change: price - previousPrice.price,
+                        bracket: currentBracket * BRACKET_SIZE
                     });
                 } else {
                     logger.info('Price unchanged, no notification sent');
@@ -231,7 +248,7 @@ class TokenTracker {
 
         const embed = new EmbedBuilder()
             .setTitle('🪙 WoW Token Price Alert')
-            .setColor(priceChange > 0 ? 0xFF0000 : priceChange < 0 ? 0x00FF00 : 0xFFD700)
+            .setColor(priceChange > 0 ? 0x00FF00 : priceChange < 0 ? 0xFF0000 : 0xFFD700)
             .setTimestamp();
 
         // Current price
@@ -262,9 +279,9 @@ class TokenTracker {
 
         // Add description
         const description = priceChange > 0
-            ? '⚠️ Token price has increased!'
+            ? '✅ Token price has increased!'
             : priceChange < 0
-                ? '✅ Token price has decreased!'
+                ? '⚠️ Token price has decreased!'
                 : 'ℹ️ Token price remains above threshold.';
 
         embed.setDescription(description);
