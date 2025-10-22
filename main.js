@@ -149,10 +149,20 @@ process.on('SIGINT', () => {
             logger.info('Token tracker cleanup completed');
         }
 
+        // Stop periodic sync service
+        const { stopPeriodicSync } = require('./services/periodic-sync');
+        stopPeriodicSync();
+        logger.info('Periodic sync service stopped');
+
         // Close token database connection
         const { closeTokenDatabase } = require('./database/token-db');
         closeTokenDatabase();
         logger.info('Token database connection closed');
+
+        // Close mythic runs database connection
+        const { closeDatabase } = require('./database/mythic-runs-db');
+        closeDatabase();
+        logger.info('Mythic runs database connection closed');
 
         // Destroy the Discord client connection
         client.destroy();
