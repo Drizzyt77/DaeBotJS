@@ -70,6 +70,16 @@ module.exports = {
             logger.error('Failed to initialize token tracker', { error: error.message });
         }
 
+        // Initialize periodic run sync service
+        // This automatically collects new M+ runs every hour to keep the database up to date
+        try {
+            const { startPeriodicSync } = require('../services/periodic-sync');
+            startPeriodicSync();
+            logger.info('Periodic run sync service started (syncs every hour)');
+        } catch (error) {
+            logger.error('Failed to start periodic run sync', { error: error.message });
+        }
+
         // Log guild information
         const guildInfo = [];
         client.guilds.cache.forEach(guild => {
