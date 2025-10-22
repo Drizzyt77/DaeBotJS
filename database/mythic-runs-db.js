@@ -422,10 +422,12 @@ class MythicRunsDatabase {
             season = null
         } = options;
 
+        // Use a subquery to find the best run for each dungeon by score
+        // Best run = highest score (which typically corresponds to highest level + timed bonuses)
         let query = `
             SELECT
                 r.dungeon,
-                MAX(r.mythic_level) as mythic_level,
+                r.mythic_level,
                 r.completed_timestamp,
                 r.duration,
                 r.is_completed_within_time,
@@ -437,10 +439,35 @@ class MythicRunsDatabase {
                 r.season
             FROM mythic_runs r
             INNER JOIN characters c ON r.character_id = c.id
-            WHERE c.name = ? AND c.realm = ? AND c.region = ?
+            INNER JOIN (
+                SELECT
+                    r2.dungeon,
+                    MAX(r2.score) as max_score
+                FROM mythic_runs r2
+                INNER JOIN characters c2 ON r2.character_id = c2.id
+                WHERE c2.name = ? AND c2.realm = ? AND c2.region = ?
         `;
 
         const params = [characterName, realm, region];
+
+        if (specName) {
+            query += ' AND r2.spec_name = ?';
+            params.push(specName);
+        }
+
+        if (season) {
+            query += ' AND r2.season = ?';
+            params.push(season);
+        }
+
+        query += `
+                GROUP BY r2.dungeon
+            ) best ON r.dungeon = best.dungeon AND r.score = best.max_score
+            WHERE c.name = ?`;
+        params.push(characterName);
+
+        query += ' AND c.realm = ? AND c.region = ?';
+        params.push(realm, region);
 
         if (specName) {
             query += ' AND r.spec_name = ?';
@@ -452,7 +479,9 @@ class MythicRunsDatabase {
             params.push(season);
         }
 
-        query += ' GROUP BY r.dungeon ORDER BY r.dungeon';
+        // Group by dungeon and pick the run with the highest score
+        // If there are still duplicates (same score), pick the most recent one
+        query += ' GROUP BY r.dungeon HAVING r.completed_timestamp = MAX(r.completed_timestamp) ORDER BY r.score DESC';
 
         const stmt = this.db.prepare(query);
         const runs = stmt.all(...params);
