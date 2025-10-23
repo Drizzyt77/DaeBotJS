@@ -264,6 +264,9 @@ class MythicRunsDatabase {
         const { name, realm = 'thrall', region = 'us', class: charClass, active_spec_name, active_spec_role } = characterData;
         const now = Date.now();
 
+        // Normalize realm to lowercase to prevent case-sensitivity issues
+        const normalizedRealm = realm.toLowerCase();
+
         const stmt = this.db.prepare(`
             INSERT INTO characters (name, realm, region, class, active_spec_name, active_spec_role, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -275,7 +278,7 @@ class MythicRunsDatabase {
             RETURNING id
         `);
 
-        const result = stmt.get(name, realm, region, charClass, active_spec_name, active_spec_role, now, now);
+        const result = stmt.get(name, normalizedRealm, region, charClass, active_spec_name, active_spec_role, now, now);
         return result.id;
     }
 
@@ -364,11 +367,14 @@ class MythicRunsDatabase {
      * @returns {number|null} Character ID or null if not found
      */
     getCharacterId(name, realm = 'thrall', region = 'us') {
+        // Normalize realm to lowercase to prevent case-sensitivity issues
+        const normalizedRealm = realm.toLowerCase();
+
         const stmt = this.db.prepare(`
             SELECT id FROM characters
             WHERE name = ? AND realm = ? AND region = ?
         `);
-        const result = stmt.get(name, realm, region);
+        const result = stmt.get(name, normalizedRealm, region);
         return result?.id || null;
     }
 
@@ -389,6 +395,9 @@ class MythicRunsDatabase {
             minLevel = null
         } = options;
 
+        // Normalize realm to lowercase to prevent case-sensitivity issues
+        const normalizedRealm = realm.toLowerCase();
+
         // Build query dynamically
         let query = `
             SELECT
@@ -408,7 +417,7 @@ class MythicRunsDatabase {
             WHERE c.name = ? AND c.realm = ? AND c.region = ?
         `;
 
-        const params = [characterName, realm, region];
+        const params = [characterName, normalizedRealm, region];
 
         if (specName) {
             query += ' AND r.spec_name = ?';
@@ -462,6 +471,9 @@ class MythicRunsDatabase {
             season = null
         } = options;
 
+        // Normalize realm to lowercase to prevent case-sensitivity issues
+        const normalizedRealm = realm.toLowerCase();
+
         // Use a subquery to find the best run for each dungeon by score
         // Best run = highest score (which typically corresponds to highest level + timed bonuses)
         let query = `
@@ -488,7 +500,7 @@ class MythicRunsDatabase {
                 WHERE c2.name = ? AND c2.realm = ? AND c2.region = ?
         `;
 
-        const params = [characterName, realm, region];
+        const params = [characterName, normalizedRealm, region];
 
         if (specName) {
             query += ' AND r2.spec_name = ?';
@@ -507,7 +519,7 @@ class MythicRunsDatabase {
         params.push(characterName);
 
         query += ' AND c.realm = ? AND c.region = ?';
-        params.push(realm, region);
+        params.push(normalizedRealm, region);
 
         if (specName) {
             query += ' AND r.spec_name = ?';
