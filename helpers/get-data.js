@@ -340,9 +340,20 @@ module.exports = {
     },
 
     /**
-     * Gets the configured character names
+     * Gets characters with realm and region information
+     * Handles both old format (string array) and new format (object array)
+     * Exposed for use by other modules that need character details
+     *
+     * @returns {Array<Object>} Array of character objects with name, realm, region
+     * @throws {Error} If character configuration cannot be loaded
+     */
+    getCharacters,
+
+    /**
+     * Gets the configured character names (deprecated)
      * Exposed for use by other modules that need access to the character list
      *
+     * @deprecated Use getCharacters() instead for access to realm/region info
      * @returns {Array<string>} Array of character names from config
      * @throws {Error} If character configuration cannot be loaded
      */
