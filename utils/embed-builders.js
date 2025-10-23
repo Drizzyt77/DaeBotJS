@@ -201,6 +201,56 @@ function addGearFieldsToEmbed(embed, gearData) {
 }
 
 /**
+ * Check if a character has completed a +12 or higher this week
+ * @param {string} characterName - Character name
+ * @param {string} realm - Character realm
+ * @param {string} region - Character region
+ * @returns {boolean} True if completed +12 or higher this week
+ */
+function hasWeeklyCompletion(characterName, realm = 'Thrall', region = 'us') {
+    try {
+        const { getDatabase } = require('../database/mythic-runs-db');
+        const db = getDatabase();
+
+        // Calculate start of this week (Tuesday reset)
+        const now = new Date();
+        const dayOfWeek = now.getUTCDay(); // 0 = Sunday, 2 = Tuesday
+        const hourOfDay = now.getUTCHours();
+
+        // Calculate days since last Tuesday 15:00 UTC
+        let daysSinceReset;
+        if (dayOfWeek < 2 || (dayOfWeek === 2 && hourOfDay < 15)) {
+            // Before Tuesday reset this week, go back to last Tuesday
+            daysSinceReset = dayOfWeek + 7 - 2;
+        } else {
+            // After Tuesday reset, days since this Tuesday
+            daysSinceReset = dayOfWeek - 2;
+        }
+
+        const weekStart = new Date(now);
+        weekStart.setUTCDate(now.getUTCDate() - daysSinceReset);
+        weekStart.setUTCHours(15, 0, 0, 0); // Tuesday 15:00 UTC
+
+        const weekStartTimestamp = weekStart.getTime();
+
+        // Query for any +12 or higher runs this week
+        const runs = db.getRunsBySpec(characterName, null, {
+            realm,
+            region,
+            minLevel: 12,
+            limit: 1 // We only need to know if one exists
+        });
+
+        // Check if any run was completed after week start
+        return runs.some(run => run.completed_timestamp >= weekStartTimestamp);
+
+    } catch (error) {
+        // If there's an error, just return false (don't show checkmark)
+        return false;
+    }
+}
+
+/**
  * Creates a dungeon comparison embed showing all characters' performance in a specific dungeon
  * @param {string} dungeonName - Name of the dungeon
  * @param {Array} characters - Array of character objects
@@ -216,13 +266,23 @@ function createDungeonComparisonEmbed(dungeonName, characters) {
     const characterRuns = characters.map(character => {
         const dungeonRun = (character.mythic_plus_runs || []).find(run => run.dungeon === dungeonName);
 
+        // Check for weekly completion (+12 or higher)
+        const weeklyComplete = hasWeeklyCompletion(
+            character.name,
+            character.realm || 'Thrall',
+            character.region || 'us'
+        );
+
         return {
             name: character.name,
             class: character.class,
             level: dungeonRun ? dungeonRun.mythic_level : 0,
             score: dungeonRun ? dungeonRun.score : 0,
             timed: dungeonRun ? dungeonRun.timed : 0,
-            role: character.role || 'DPS'
+            role: character.role || 'DPS',
+            weeklyComplete,
+            realm: character.realm,
+            region: character.region
         };
     });
 
@@ -245,7 +305,8 @@ function createDungeonComparisonEmbed(dungeonName, characters) {
                 .map(run => {
                     const timedSymbol = getTimedSymbol(run.timed);
                     const classIcon = getClassIcon(run.class);
-                    return `${classIcon} **${run.name}**\n${run.level}${timedSymbol} | Score: ${run.score}`;
+                    const weeklyCheck = run.weeklyComplete ? ' ✅' : '';
+                    return `${classIcon} **${run.name}**${weeklyCheck}\n${run.level}${timedSymbol} | Score: ${run.score}`;
                 })
                 .join('\n\n');
 
@@ -262,10 +323,11 @@ function createDungeonComparisonEmbed(dungeonName, characters) {
     if (completedRuns.length > 0) {
         const highestLevel = Math.max(...completedRuns.map(r => r.level));
         const bestScore = Math.max(...completedRuns.map(r => r.score));
+        const weeklyCompletions = characterRuns.filter(r => r.weeklyComplete).length;
 
         embed.addFields({
             name: 'Dungeon Summary',
-            value: `Highest Level: **+${highestLevel}**\nBest Score: **${bestScore}**\nCompleted by: **${completedRuns.length}** characters`,
+            value: `Highest Level: **+${highestLevel}**\nBest Score: **${bestScore}**\nCompleted by: **${completedRuns.length}** characters\n✅ Weekly (+12): **${weeklyCompletions}** characters`,
             inline: false
         });
     }
