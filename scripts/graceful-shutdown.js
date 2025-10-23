@@ -53,11 +53,19 @@ function shutdownProcess(pid) {
     return new Promise((resolve) => {
         console.log(`Sending graceful shutdown signal to process ${pid}...`);
 
-        // Send Ctrl+C signal (SIGINT equivalent on Windows)
+        // First try graceful shutdown without /F
         exec(`taskkill /PID ${pid}`, (error) => {
             if (error) {
-                console.error('Error sending shutdown signal:', error.message);
-                resolve(false);
+                // If graceful fails, use force terminate
+                console.log('Graceful shutdown failed, using force terminate...');
+                exec(`taskkill /F /PID ${pid}`, (error2) => {
+                    if (error2) {
+                        console.error('Error force terminating process:', error2.message);
+                        resolve(false);
+                        return;
+                    }
+                    resolve(true);
+                });
                 return;
             }
             resolve(true);

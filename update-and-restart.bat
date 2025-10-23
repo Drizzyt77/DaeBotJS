@@ -78,8 +78,8 @@ REM Save current commit hash for rollback reference
 for /f "tokens=*" %%i in ('git rev-parse HEAD') do set OLD_COMMIT=%%i
 echo       Current commit: !OLD_COMMIT:~0,7!
 
-REM Pull latest code
-git pull origin main
+REM Pull latest code (use Main as remote name based on git remote -v output)
+git pull Main main
 if !errorlevel! NEQ 0 (
     echo.
     echo       ERROR: Failed to pull from GitHub!
