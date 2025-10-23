@@ -5,14 +5,13 @@
  */
 
 const logger = require('../utils/logger');
+const { getConfigService } = require('./config-service');
 
 /**
  * Base configuration for RaiderIO API requests
  */
 const RAIDERIO_CONFIG = {
     BASE_URL: 'https://raider.io/api/v1/characters/profile',
-    DEFAULT_REGION: 'us',
-    DEFAULT_REALM: 'Thrall',
     REQUEST_TIMEOUT: 10000, // 10 seconds
     MAX_RETRIES: 3,
     RETRY_DELAY: 1000 // 1 second base delay
@@ -365,11 +364,14 @@ class RaiderIOClient {
     /**
      * Generates character links for external services
      * @param {Array<string>} characterNames - Array of character names
-     * @param {string} region - WoW region (default: 'us')
-     * @param {string} realm - WoW realm (default: 'thrall')
+     * @param {string} region - WoW region (default from config)
+     * @param {string} realm - WoW realm (default from config)
      * @returns {Array} Array of character link objects
      */
-    generateCharacterLinks(characterNames, region = 'us', realm = 'thrall') {
+    generateCharacterLinks(characterNames, region = null, realm = null) {
+        const config = getConfigService();
+        region = region || config.getDefaultRegion();
+        realm = realm || config.getDefaultRealm();
         const realmSlug = realm.toLowerCase();
 
         return characterNames.map(characterName => ({

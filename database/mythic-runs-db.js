@@ -16,6 +16,16 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
 
+// Helper function to get config service (lazy loaded to avoid circular dependency)
+let configServiceInstance = null;
+function getConfigService() {
+    if (!configServiceInstance) {
+        const { getConfigService } = require('../services/config-service');
+        configServiceInstance = getConfigService();
+    }
+    return configServiceInstance;
+}
+
 // Database configuration
 const DB_DIR = path.join(__dirname, '../data');
 const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
@@ -23,7 +33,7 @@ const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
 /**
  * Database schema version for migrations
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * MythicRunsDatabase class
@@ -253,6 +263,23 @@ class MythicRunsDatabase {
 
             logger.info('Migration 2 -> 3 completed: Added bot_settings table with default values');
         }
+
+        // Migration 3 -> 4: Add default_realm column to bot_settings
+        if (fromVersion < 4) {
+            logger.info('Applying migration 3 -> 4: Adding default_realm column');
+
+            this.db.exec(`
+                -- Add default_realm column to bot_settings
+                ALTER TABLE bot_settings ADD COLUMN default_realm TEXT NOT NULL DEFAULT 'thrall';
+            `);
+
+            // Record schema version
+            this.db.prepare(
+                'INSERT INTO schema_info (version, applied_at) VALUES (?, ?)'
+            ).run(4, Date.now());
+
+            logger.info('Migration 3 -> 4 completed: Added default_realm column');
+        }
     }
 
     /**
@@ -261,7 +288,15 @@ class MythicRunsDatabase {
      * @returns {number} Character ID
      */
     upsertCharacter(characterData) {
-        const { name, realm = 'thrall', region = 'us', class: charClass, active_spec_name, active_spec_role } = characterData;
+        const config = getConfigService();
+        const {
+            name,
+            realm = config.getDefaultRealm(),
+            region = config.getDefaultRegion(),
+            class: charClass,
+            active_spec_name,
+            active_spec_role
+        } = characterData;
         const now = Date.now();
 
         // Normalize realm to lowercase to prevent case-sensitivity issues
@@ -362,19 +397,23 @@ class MythicRunsDatabase {
     /**
      * Get character ID by name
      * @param {string} name - Character name
-     * @param {string} realm - Realm (default: 'thrall')
-     * @param {string} region - Region (default: 'us')
+     * @param {string} realm - Realm (default from config)
+     * @param {string} region - Region (default from config)
      * @returns {number|null} Character ID or null if not found
      */
-    getCharacterId(name, realm = 'thrall', region = 'us') {
+    getCharacterId(name, realm = null, region = null) {
+        const config = getConfigService();
+        const effectiveRealm = realm || config.getDefaultRealm();
+        const effectiveRegion = region || config.getDefaultRegion();
+
         // Normalize realm to lowercase to prevent case-sensitivity issues
-        const normalizedRealm = realm.toLowerCase();
+        const normalizedRealm = effectiveRealm.toLowerCase();
 
         const stmt = this.db.prepare(`
             SELECT id FROM characters
             WHERE name = ? AND realm = ? AND region = ?
         `);
-        const result = stmt.get(name, normalizedRealm, region);
+        const result = stmt.get(name, normalizedRealm, effectiveRegion);
         return result?.id || null;
     }
 
@@ -386,9 +425,10 @@ class MythicRunsDatabase {
      * @returns {Array} Array of runs
      */
     getRunsBySpec(characterName, specName = null, options = {}) {
+        const config = getConfigService();
         const {
-            realm = 'thrall',
-            region = 'us',
+            realm = config.getDefaultRealm(),
+            region = config.getDefaultRegion(),
             dungeon = null,
             season = null,
             limit = null,
@@ -465,9 +505,10 @@ class MythicRunsDatabase {
      * @returns {Array} Array of best runs per dungeon
      */
     getBestRunsPerDungeon(characterName, specName = null, options = {}) {
+        const config = getConfigService();
         const {
-            realm = 'thrall',
-            region = 'us',
+            realm = config.getDefaultRealm(),
+            region = config.getDefaultRegion(),
             season = null
         } = options;
 

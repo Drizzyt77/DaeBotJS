@@ -207,9 +207,13 @@ function addGearFieldsToEmbed(embed, gearData) {
  * @param {string} region - Character region
  * @returns {boolean} True if completed +12 or higher this week
  */
-function hasWeeklyCompletion(characterName, realm = 'Thrall', region = 'us') {
+function hasWeeklyCompletion(characterName, realm = null, region = null) {
     try {
         const { getDatabase } = require('../database/mythic-runs-db');
+        const { getConfigService } = require('../services/config-service');
+        const config = getConfigService();
+        realm = realm || config.getDefaultRealm();
+        region = region || config.getDefaultRegion();
         const db = getDatabase();
 
         // Calculate start of this week (Tuesday reset)

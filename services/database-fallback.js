@@ -6,10 +6,8 @@
  */
 
 const { getDatabase } = require('../database/mythic-runs-db');
+const { getConfigService } = require('./config-service');
 const logger = require('../utils/logger');
-
-// Current season
-const CURRENT_SEASON = 'season-tww-3';
 
 /**
  * Get character data from database (fallback for Raider.IO)
@@ -18,10 +16,11 @@ const CURRENT_SEASON = 'season-tww-3';
  * @returns {Object|null} Character data in Raider.IO format
  */
 function getCharacterFromDB(characterName, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {
@@ -85,10 +84,11 @@ function getCharacterFromDB(characterName, options = {}) {
  * @returns {Array} Array of character data with recent runs
  */
 function getRecentRunsFromDB(characterNames, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     logger.info('Using database fallback for recent runs', {
@@ -127,10 +127,11 @@ function getRecentRunsFromDB(characterNames, options = {}) {
  * @returns {Array} Array of character data with best runs
  */
 function getMythicPlusDataFromDB(characterNames, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     logger.info('Using database fallback for mythic+ data', {
@@ -204,9 +205,10 @@ function getMythicPlusDataFromDB(characterNames, options = {}) {
  * @returns {boolean} True if character exists
  */
 function characterExistsInDB(characterName, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us'
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion()
     } = options;
 
     try {

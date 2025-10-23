@@ -6,10 +6,8 @@
  */
 
 const { getDatabase } = require('../database/mythic-runs-db');
+const { getConfigService } = require('./config-service');
 const logger = require('../utils/logger');
-
-// Current season (should match run-collector.js)
-const CURRENT_SEASON = 'season-tww-3';
 
 /**
  * Get available specs for a character based on stored runs
@@ -18,10 +16,11 @@ const CURRENT_SEASON = 'season-tww-3';
  * @returns {Array<string>} Array of spec names
  */
 function getAvailableSpecs(characterName, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {
@@ -63,10 +62,11 @@ function getAvailableSpecs(characterName, options = {}) {
  * @returns {Array} Formatted runs for UI
  */
 function getBestRunsForUI(characterName, specName = null, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {
@@ -108,10 +108,11 @@ function getBestRunsForUI(characterName, specName = null, options = {}) {
  * @returns {Object} Enhanced character data
  */
 function enhanceCharacterWithDBRuns(characterData, selectedSpec = null, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {
@@ -170,10 +171,11 @@ function enhanceCharacterWithDBRuns(characterData, selectedSpec = null, options 
  * @returns {number} Resilient level (0 if no resilient level found)
  */
 function calculateResilientLevel(characterName, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {
@@ -247,10 +249,11 @@ function calculateResilientLevel(characterName, options = {}) {
  * @returns {Object} Spec names mapped to run counts
  */
 function getRunCountsBySpec(characterName, options = {}) {
+    const config = getConfigService();
     const {
-        realm = 'thrall',
-        region = 'us',
-        season = CURRENT_SEASON
+        realm = config.getDefaultRealm(),
+        region = config.getDefaultRegion(),
+        season = config.getCurrentSeasonName()
     } = options;
 
     try {

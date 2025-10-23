@@ -139,8 +139,8 @@ class RunCollector {
     async collectBestRuns(characterName, options = {}) {
         const configService = getConfigService();
         const {
-            realm = 'thrall',
-            region = 'us',
+            realm = configService.getDefaultRealm(),
+            region = configService.getDefaultRegion(),
             season = configService.getCurrentSeasonName()
         } = options;
 
@@ -305,8 +305,8 @@ class RunCollector {
     async collectCharacterRuns(characterName, options = {}) {
         const configService = getConfigService();
         const {
-            realm = 'thrall',
-            region = 'us',
+            realm = configService.getDefaultRealm(),
+            region = configService.getDefaultRegion(),
             season = configService.getCurrentSeasonName()
         } = options;
 

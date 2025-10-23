@@ -6,6 +6,7 @@
  */
 
 const logger = require('../utils/logger');
+const { getConfigService } = require('./config-service');
 
 /**
  * Current Mythic Keystone Season ID
@@ -21,8 +22,6 @@ const CURRENT_BLIZZARD_SEASON = 15;
 const BLIZZARD_CONFIG = {
     OAUTH_URL: 'https://oauth.battle.net/token',
     API_BASE_URL: 'https://us.api.blizzard.com',
-    DEFAULT_REGION: 'us',
-    DEFAULT_REALM: 'thrall',
     REQUEST_TIMEOUT: 10000,
     MAX_RETRIES: 2,
     RETRY_DELAY: 1000
@@ -164,7 +163,10 @@ class BlizzardClient {
      * @param {string} region - Region (default: 'us')
      * @returns {Promise<Object|null>} Mythic keystone profile data
      */
-    async getMythicKeystoneProfile(characterName, realm = 'thrall', region = 'us') {
+    async getMythicKeystoneProfile(characterName, realm = null, region = null) {
+        const config = getConfigService();
+        realm = realm || config.getDefaultRealm();
+        region = region || config.getDefaultRegion();
         if (!this.isConfigured()) {
             logger.debug('Blizzard API not configured, skipping spec lookup');
             return null;
@@ -192,7 +194,10 @@ class BlizzardClient {
      * @param {number} seasonId - Season ID (defaults to current season)
      * @returns {Promise<Object|null>} Season details with runs
      */
-    async getCurrentSeasonProfile(characterName, realm = 'thrall', region = 'us', seasonId = CURRENT_BLIZZARD_SEASON) {
+    async getCurrentSeasonProfile(characterName, realm = null, region = null, seasonId = CURRENT_BLIZZARD_SEASON) {
+        const config = getConfigService();
+        realm = realm || config.getDefaultRealm();
+        region = region || config.getDefaultRegion();
         if (!this.isConfigured()) {
             return null;
         }

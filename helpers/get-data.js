@@ -32,21 +32,25 @@ function getCharacters() {
 
         // Handle both old format (array of strings) and new format (array of objects)
         // This provides backward compatibility during migration
+        // Get config defaults
+        const { getConfigService } = require('../services/config-service');
+        const config = getConfigService();
+
         return characters.map(char => {
             if (typeof char === 'string') {
-                // Old format: just character name
+                // Old format: just character name - use config defaults
                 logger.debug('Converting legacy character format', { name: char });
                 return {
                     name: char,
-                    realm: 'Thrall',  // Default realm for legacy entries
-                    region: 'us'       // Default region for legacy entries
+                    realm: config.getDefaultRealm(),
+                    region: config.getDefaultRegion()
                 };
             } else if (typeof char === 'object' && char.name) {
-                // New format: object with name, realm, region
+                // New format: object with name, realm, region - use config defaults as fallback
                 return {
                     name: char.name,
-                    realm: char.realm || 'Thrall',
-                    region: char.region || 'us'
+                    realm: char.realm || config.getDefaultRealm(),
+                    region: char.region || config.getDefaultRegion()
                 };
             } else {
                 logger.warn('Invalid character entry in config', { char });

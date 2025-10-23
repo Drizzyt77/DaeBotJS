@@ -43,6 +43,7 @@ class ConfigService {
                     current_season_id,
                     current_season_name,
                     default_region,
+                    default_realm,
                     active_dungeons,
                     updated_at
                 FROM bot_settings
@@ -61,6 +62,7 @@ class ConfigService {
                 currentSeasonId: settings.current_season_id,
                 currentSeasonName: settings.current_season_name,
                 defaultRegion: settings.default_region,
+                defaultRealm: settings.default_realm || 'thrall', // Fallback for existing databases
                 activeDungeons: JSON.parse(settings.active_dungeons || '[]'),
                 updatedAt: settings.updated_at
             };
@@ -68,6 +70,8 @@ class ConfigService {
             logger.debug('Loaded settings from database', {
                 seasonId: parsedSettings.currentSeasonId,
                 seasonName: parsedSettings.currentSeasonName,
+                realm: parsedSettings.defaultRealm,
+                region: parsedSettings.defaultRegion,
                 dungeonCount: parsedSettings.activeDungeons.length
             });
 
@@ -92,6 +96,7 @@ class ConfigService {
             currentSeasonId: 15,
             currentSeasonName: 'season-tww-3',
             defaultRegion: 'us',
+            defaultRealm: 'thrall',
             activeDungeons: [
                 'Ara-Kara, City of Echoes',
                 'Eco-Dome Al\'dani',
@@ -160,6 +165,15 @@ class ConfigService {
     getDefaultRegion() {
         const settings = this._getSettings();
         return settings.defaultRegion;
+    }
+
+    /**
+     * Get default realm (normalized to lowercase)
+     * @returns {string} Realm name (e.g., 'thrall')
+     */
+    getDefaultRealm() {
+        const settings = this._getSettings();
+        return settings.defaultRealm.toLowerCase();
     }
 
     /**
@@ -240,6 +254,36 @@ class ConfigService {
             logger.error('Failed to update default region', {
                 error: error.message,
                 region
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Update default realm
+     * @param {string} realm - Realm name
+     * @returns {boolean} True if successful
+     */
+    setDefaultRealm(realm) {
+        try {
+            const stmt = this.db.db.prepare(`
+                UPDATE bot_settings
+                SET default_realm = ?,
+                    updated_at = ?
+                WHERE id = 1
+            `);
+
+            stmt.run(realm.toLowerCase(), Date.now());
+            this.invalidateCache();
+
+            logger.info('Default realm updated', { realm });
+
+            return true;
+
+        } catch (error) {
+            logger.error('Failed to update default realm', {
+                error: error.message,
+                realm
             });
             return false;
         }
