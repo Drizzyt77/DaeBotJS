@@ -213,6 +213,25 @@ async function handleModalSubmission(interaction) {
         }
     }
 
+    // Route bot settings modal submissions to the bot-settings command handler
+    if (interaction.customId === 'bot_settings_dungeons_modal') {
+        try {
+            const botSettingsCommand = require('../commands/bot-settings');
+            await botSettingsCommand.handleModalSubmit(interaction);
+            logger.debug('Bot settings modal submission completed', { customId: interaction.customId });
+            return;
+        } catch (error) {
+            logger.error('Error handling bot settings modal submission', {
+                customId: interaction.customId,
+                error: error.message,
+                stack: error.stack,
+                user: interaction.user.tag
+            });
+            await sendErrorResponse(interaction, 'There was an error processing your settings update.');
+            return;
+        }
+    }
+
     // Handle other modal submissions
     // Future modal handlers can be added here following the same pattern
     logger.warn('No handler found for modal submission', {

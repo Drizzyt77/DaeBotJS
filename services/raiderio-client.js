@@ -163,19 +163,41 @@ class RaiderIOClient {
 
     /**
      * Fetches character data for multiple characters with a specific field set
-     * @param {Array<string>} characterNames - Array of character names
+     * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
      * @param {string} fields - API fields to request
      * @param {Function} dataParser - Function to parse individual character data
      * @returns {Promise<Array>} Array of parsed character data (excludes failed requests)
      */
-    async fetchCharacterData(characterNames, fields, dataParser) {
-        const promises = characterNames.map(async characterName => {
+    async fetchCharacterData(characters, fields, dataParser) {
+        const promises = characters.map(async character => {
+            // Handle both old format (string) and new format (object)
+            let characterName, realm, region;
+            if (typeof character === 'string') {
+                // Legacy support: just character name
+                characterName = character;
+                realm = this.config.DEFAULT_REALM;
+                region = this.config.DEFAULT_REGION;
+            } else if (typeof character === 'object' && character.name) {
+                // New format: object with name, realm, region
+                characterName = character.name;
+                realm = character.realm || this.config.DEFAULT_REALM;
+                region = character.region || this.config.DEFAULT_REGION;
+            } else {
+                logger.warn('Invalid character format', { character });
+                return null;
+            }
+
             try {
-                const url = this.buildApiUrl(characterName, fields);
+                const url = this.buildApiUrl(characterName, fields, region, realm);
                 const rawData = await this.makeRequest(url, characterName);
                 return dataParser(rawData, characterName);
             } catch (error) {
-                logger.error('Failed to fetch character data from RaiderIO', { characterName, error: error.message });
+                logger.error('Failed to fetch character data from RaiderIO', {
+                    characterName,
+                    realm,
+                    region,
+                    error: error.message
+                });
                 return null; // Return null for failed requests
             }
         });
@@ -290,12 +312,12 @@ class RaiderIOClient {
 
     /**
      * Fetches mythic plus data for multiple characters
-     * @param {Array<string>} characterNames - Array of character names
+     * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
      * @returns {Promise<Array>} Array of character mythic plus data
      */
-    async getMythicPlusData(characterNames) {
+    async getMythicPlusData(characters) {
         return this.fetchCharacterData(
-            characterNames,
+            characters,
             API_FIELDS.MYTHIC_PLUS,
             this.parseMythicPlusData.bind(this)
         );
@@ -303,12 +325,12 @@ class RaiderIOClient {
 
     /**
      * Fetches raid progression data for multiple characters
-     * @param {Array<string>} characterNames - Array of character names
+     * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
      * @returns {Promise<Array>} Array of character raid progression data
      */
-    async getRaidData(characterNames) {
+    async getRaidData(characters) {
         return this.fetchCharacterData(
-            characterNames,
+            characters,
             API_FIELDS.RAID_PROGRESSION,
             this.parseRaidData.bind(this)
         );
@@ -316,12 +338,12 @@ class RaiderIOClient {
 
     /**
      * Fetches recent mythic plus runs for multiple characters
-     * @param {Array<string>} characterNames - Array of character names
+     * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
      * @returns {Promise<Array>} Array of character recent runs data
      */
-    async getRecentRunsData(characterNames) {
+    async getRecentRunsData(characters) {
         return this.fetchCharacterData(
-            characterNames,
+            characters,
             API_FIELDS.RECENT_RUNS,
             this.parseRecentRunsData.bind(this)
         );

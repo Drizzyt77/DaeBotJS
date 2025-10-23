@@ -23,7 +23,7 @@ const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
 /**
  * Database schema version for migrations
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * MythicRunsDatabase class
@@ -212,6 +212,46 @@ class MythicRunsDatabase {
             ).run(2, Date.now());
 
             logger.info('Migration 1 -> 2 completed: Fixed unique constraint for deduplication');
+        }
+
+        // Migration 2 -> 3: Add bot_settings table for dynamic configuration
+        if (fromVersion < 3) {
+            logger.info('Applying migration 2 -> 3: Adding bot_settings table');
+
+            this.db.exec(`
+                -- Bot settings table for global configuration
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    current_season_id INTEGER NOT NULL DEFAULT 15,
+                    current_season_name TEXT NOT NULL DEFAULT 'season-tww-3',
+                    default_region TEXT NOT NULL DEFAULT 'us',
+                    active_dungeons TEXT NOT NULL DEFAULT '[]',
+                    updated_at INTEGER NOT NULL
+                );
+            `);
+
+            // Initialize default settings with current hardcoded values
+            const defaultDungeons = JSON.stringify([
+                'Ara-Kara, City of Echoes',
+                'Eco-Dome Al\'dani',
+                'Halls of Atonement',
+                'The Dawnbreaker',
+                'Priory of the Sacred Flame',
+                'Operation: Floodgate',
+                'Tazavesh: So\'leah\'s Gambit',
+                'Tazavesh: Streets of Wonder'
+            ]);
+
+            this.db.prepare(
+                'INSERT INTO bot_settings (id, current_season_id, current_season_name, default_region, active_dungeons, updated_at) VALUES (1, 15, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING'
+            ).run('season-tww-3', 'us', defaultDungeons, Date.now());
+
+            // Record schema version
+            this.db.prepare(
+                'INSERT INTO schema_info (version, applied_at) VALUES (?, ?)'
+            ).run(3, Date.now());
+
+            logger.info('Migration 2 -> 3 completed: Added bot_settings table with default values');
         }
     }
 

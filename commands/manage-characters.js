@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 const weeklyCsvLogger = require('../utils/weekly-csv-logger');
+const { getConfigService } = require('../services/config-service');
 
 // Path to the config file
 const CONFIG_PATH = path.join(__dirname, '../config.json');
@@ -29,6 +30,21 @@ const EMBED_COLORS = {
     ERROR: 0xFF0000,        // Red for errors
     INFO: 0x0099FF          // Blue for informational messages
 };
+
+/**
+ * Valid WoW regions
+ */
+const VALID_REGIONS = ['us', 'eu', 'kr', 'tw', 'cn'];
+
+/**
+ * Common WoW realm names for autocomplete
+ */
+const COMMON_REALMS = [
+    'Thrall', 'Area 52', 'Stormrage', 'Tichondrius', 'Illidan', 'Sargeras',
+    'Bleeding Hollow', 'Mal\'Ganis', 'Zul\'jin', 'Kil\'jaeden', 'Emerald Dream',
+    'Moon Guard', 'Wyrmrest Accord', 'Proudmoore', 'Aegwynn', 'Dalaran',
+    'Frostmourne', 'Barthilas', 'Ragnaros', 'Azralon', 'Nemesis'
+];
 
 /**
  * Loads the current configuration from file
@@ -79,30 +95,65 @@ function validateCharacterName(characterName) {
 
 /**
  * Creates a success embed showing the updated character list
- * @param {string} action - Action performed (Added/Removed)
- * @param {string} characterName - Character name that was modified
+ * @param {string} action - Action performed (Added/Removed/Edited)
+ * @param {string|Object} characterInfo - Character name or full info object
  * @param {Array} updatedList - Current character list after modification
  * @returns {EmbedBuilder} Success embed
  */
-function createSuccessEmbed(action, characterName, updatedList) {
+function createSuccessEmbed(action, characterInfo, updatedList) {
+    let description;
+    if (typeof characterInfo === 'string') {
+        description = `**${characterInfo}** has been ${action.toLowerCase()} ${action === 'Added' ? 'to' : action === 'Removed' ? 'from' : 'in'} the character list.`;
+    } else {
+        description = `**${characterInfo.name}** (${characterInfo.realm}-${characterInfo.region.toUpperCase()}) has been ${action.toLowerCase()}.`;
+    }
+
     const embed = new EmbedBuilder()
         .setTitle(`✅ Character ${action}`)
-        .setDescription(`**${characterName}** has been ${action.toLowerCase()} ${action === 'Added' ? 'to' : 'from'} the character list.`)
+        .setDescription(description)
         .setColor(EMBED_COLORS.SUCCESS)
         .setTimestamp();
 
     // Add current character list
     if (updatedList.length > 0) {
         const characterDisplay = updatedList
-            .sort()
-            .map((char, index) => `${index + 1}. ${char}`)
+            .map((char, index) => {
+                if (typeof char === 'string') {
+                    return `${index + 1}. ${char}`;
+                } else {
+                    return `${index + 1}. ${char.name} (${char.realm}-${char.region.toUpperCase()})`;
+                }
+            })
             .join('\n');
 
+        // Split into chunks if too long (Discord limit is 1024 per field)
+        const chunks = [];
+        let currentChunk = '';
+        characterDisplay.split('\n').forEach(line => {
+            if ((currentChunk + line + '\n').length > 1000) {
+                chunks.push(currentChunk);
+                currentChunk = line + '\n';
+            } else {
+                currentChunk += line + '\n';
+            }
+        });
+        if (currentChunk) chunks.push(currentChunk);
+
+        // Add first chunk
         embed.addFields({
             name: `📋 Current Characters (${updatedList.length})`,
-            value: characterDisplay,
+            value: chunks[0] || 'None',
             inline: false
         });
+
+        // Add additional chunks if needed
+        for (let i = 1; i < chunks.length && i < 3; i++) {
+            embed.addFields({
+                name: `📋 Continued...`,
+                value: chunks[i],
+                inline: false
+            });
+        }
     } else {
         embed.addFields({
             name: '📋 Current Characters',
@@ -143,6 +194,58 @@ module.exports = {
                         .setDescription('Character name to add')
                         .setRequired(true)
                 )
+                .addStringOption(option =>
+                    option
+                        .setName('realm')
+                        .setDescription('Character realm (e.g., Thrall)')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('region')
+                        .setDescription('Character region')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'US', value: 'us' },
+                            { name: 'EU', value: 'eu' },
+                            { name: 'KR', value: 'kr' },
+                            { name: 'TW', value: 'tw' },
+                            { name: 'CN', value: 'cn' }
+                        )
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('edit')
+                .setDescription('Edit a character\'s realm or region')
+                .addStringOption(option =>
+                    option
+                        .setName('character')
+                        .setDescription('Character name to edit')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('realm')
+                        .setDescription('New realm (leave empty to keep current)')
+                        .setRequired(false)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('region')
+                        .setDescription('New region (leave empty to keep current)')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'US', value: 'us' },
+                            { name: 'EU', value: 'eu' },
+                            { name: 'KR', value: 'kr' },
+                            { name: 'TW', value: 'tw' },
+                            { name: 'CN', value: 'cn' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -173,29 +276,59 @@ module.exports = {
         ),
 
     /**
-     * Handles autocomplete for the remove subcommand
+     * Handles autocomplete for character and realm inputs
      * @param {AutocompleteInteraction} interaction - Discord autocomplete interaction
      */
     async autocomplete(interaction) {
         if (interaction.commandName !== 'manage-characters') return;
 
         const subcommand = interaction.options.getSubcommand();
-        if (subcommand !== 'remove') return;
+        const focusedOption = interaction.options.getFocused(true);
 
         try {
-            const config = loadConfig();
-            const focusedValue = interaction.options.getFocused().toLowerCase();
+            // Handle realm autocomplete
+            if (focusedOption.name === 'realm') {
+                const focusedValue = focusedOption.value.toLowerCase();
+                const filtered = COMMON_REALMS
+                    .filter(realm => realm.toLowerCase().includes(focusedValue))
+                    .slice(0, 25); // Discord limit
 
-            const filtered = config.characters
-                .filter(character => character.toLowerCase().includes(focusedValue))
-                .slice(0, 25); // Discord limit
+                await interaction.respond(
+                    filtered.map(realm => ({
+                        name: realm,
+                        value: realm
+                    }))
+                );
+                return;
+            }
 
-            await interaction.respond(
-                filtered.map(character => ({
-                    name: character,
-                    value: character
-                }))
-            );
+            // Handle character autocomplete for remove/edit
+            if (focusedOption.name === 'character' && (subcommand === 'remove' || subcommand === 'edit')) {
+                const config = loadConfig();
+                const focusedValue = focusedOption.value.toLowerCase();
+
+                const filtered = config.characters
+                    .filter(char => {
+                        const charName = typeof char === 'string' ? char : char.name;
+                        return charName.toLowerCase().includes(focusedValue);
+                    })
+                    .slice(0, 25); // Discord limit
+
+                await interaction.respond(
+                    filtered.map(char => {
+                        if (typeof char === 'string') {
+                            return { name: char, value: char };
+                        } else {
+                            return {
+                                name: `${char.name} (${char.realm}-${char.region.toUpperCase()})`,
+                                value: char.name
+                            };
+                        }
+                    })
+                );
+                return;
+            }
+
         } catch (error) {
             logger.error('Error in manage-characters autocomplete', { error: error.message });
             await interaction.respond([]);
@@ -219,27 +352,107 @@ module.exports = {
                 case 'add': {
                     const rawCharacterName = interaction.options.getString('character');
                     const characterName = validateCharacterName(rawCharacterName);
+                    const realm = interaction.options.getString('realm') || 'Thrall';
+                    const configService = getConfigService();
+                    const region = interaction.options.getString('region') || configService.getDefaultRegion();
+
+                    // Normalize realm capitalization
+                    const normalizedRealm = realm.split(/[\s-]/).map(word =>
+                        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    ).join(' ');
 
                     // Check if character already exists
-                    if (config.characters.includes(characterName)) {
+                    const existingChar = config.characters.find(char => {
+                        const name = typeof char === 'string' ? char : char.name;
+                        const charRealm = typeof char === 'string' ? 'Thrall' : char.realm;
+                        const charRegion = typeof char === 'string' ? 'us' : char.region;
+                        return name.toLowerCase() === characterName.toLowerCase() &&
+                               charRealm.toLowerCase() === normalizedRealm.toLowerCase() &&
+                               charRegion.toLowerCase() === region.toLowerCase();
+                    });
+
+                    if (existingChar) {
                         const errorEmbed = createErrorEmbed(
                             'Character Already Exists',
-                            `**${characterName}** is already in the character list.`
+                            `**${characterName}** on **${normalizedRealm}-${region.toUpperCase()}** is already in the character list.`
                         );
                         await interaction.editReply({ embeds: [errorEmbed] });
                         return;
                     }
 
-                    // Add character to the list
-                    config.characters.push(characterName);
+                    // Add character to the list with new format
+                    const newCharacter = {
+                        name: characterName,
+                        realm: normalizedRealm,
+                        region: region.toLowerCase()
+                    };
+                    config.characters.push(newCharacter);
                     saveConfig(config);
 
-                    const successEmbed = createSuccessEmbed('Added', characterName, config.characters);
+                    const successEmbed = createSuccessEmbed('Added', newCharacter, config.characters);
                     await interaction.editReply({ embeds: [successEmbed] });
 
-                    logger.logConfigChange('ADD', `character: ${characterName}`, interaction.user, {
+                    logger.logConfigChange('ADD', `character: ${characterName}, realm: ${normalizedRealm}, region: ${region}`, interaction.user, {
                         characterName,
+                        realm: normalizedRealm,
+                        region,
                         totalCharacters: config.characters.length
+                    });
+                    break;
+                }
+
+                case 'edit': {
+                    const characterName = interaction.options.getString('character');
+                    const newRealm = interaction.options.getString('realm');
+                    const newRegion = interaction.options.getString('region');
+
+                    // Find character
+                    const charIndex = config.characters.findIndex(char => {
+                        const name = typeof char === 'string' ? char : char.name;
+                        return name.toLowerCase() === characterName.toLowerCase();
+                    });
+
+                    if (charIndex === -1) {
+                        const errorEmbed = createErrorEmbed(
+                            'Character Not Found',
+                            `**${characterName}** is not in the character list.`
+                        );
+                        await interaction.editReply({ embeds: [errorEmbed] });
+                        return;
+                    }
+
+                    // Get current character data
+                    let currentChar = config.characters[charIndex];
+                    if (typeof currentChar === 'string') {
+                        // Convert legacy format to new format
+                        currentChar = {
+                            name: currentChar,
+                            realm: 'Thrall',
+                            region: 'us'
+                        };
+                    }
+
+                    // Update with new values
+                    if (newRealm) {
+                        const normalizedRealm = newRealm.split(/[\s-]/).map(word =>
+                            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                        ).join(' ');
+                        currentChar.realm = normalizedRealm;
+                    }
+                    if (newRegion) {
+                        currentChar.region = newRegion.toLowerCase();
+                    }
+
+                    config.characters[charIndex] = currentChar;
+                    saveConfig(config);
+
+                    const successEmbed = createSuccessEmbed('Edited', currentChar, config.characters);
+                    await interaction.editReply({ embeds: [successEmbed] });
+
+                    logger.logConfigChange('EDIT', `character: ${currentChar.name}, realm: ${currentChar.realm}, region: ${currentChar.region}`, interaction.user, {
+                        characterName: currentChar.name,
+                        realm: currentChar.realm,
+                        region: currentChar.region
                     });
                     break;
                 }
@@ -247,9 +460,13 @@ module.exports = {
                 case 'remove': {
                     const characterName = interaction.options.getString('character');
 
-                    // Check if character exists
-                    const characterIndex = config.characters.indexOf(characterName);
-                    if (characterIndex === -1) {
+                    // Find and remove character
+                    const charIndex = config.characters.findIndex(char => {
+                        const name = typeof char === 'string' ? char : char.name;
+                        return name.toLowerCase() === characterName.toLowerCase();
+                    });
+
+                    if (charIndex === -1) {
                         const errorEmbed = createErrorEmbed(
                             'Character Not Found',
                             `**${characterName}** is not in the character list.`
@@ -259,7 +476,7 @@ module.exports = {
                     }
 
                     // Remove character from the list
-                    config.characters.splice(characterIndex, 1);
+                    config.characters.splice(charIndex, 1);
                     saveConfig(config);
 
                     const successEmbed = createSuccessEmbed('Removed', characterName, config.characters);
@@ -280,16 +497,45 @@ module.exports = {
 
                     if (config.characters.length > 0) {
                         const characterDisplay = config.characters
-                            .sort()
-                            .map((char, index) => `${index + 1}. ${char}`)
+                            .map((char, index) => {
+                                if (typeof char === 'string') {
+                                    return `${index + 1}. ${char}`;
+                                } else {
+                                    return `${index + 1}. ${char.name} (${char.realm}-${char.region.toUpperCase()})`;
+                                }
+                            })
                             .join('\n');
 
                         embed.setDescription(`**Total Characters:** ${config.characters.length}`);
+
+                        // Split into chunks if too long
+                        const chunks = [];
+                        let currentChunk = '';
+                        characterDisplay.split('\n').forEach(line => {
+                            if ((currentChunk + line + '\n').length > 1000) {
+                                chunks.push(currentChunk);
+                                currentChunk = line + '\n';
+                            } else {
+                                currentChunk += line + '\n';
+                            }
+                        });
+                        if (currentChunk) chunks.push(currentChunk);
+
+                        // Add first chunk
                         embed.addFields({
                             name: 'Characters',
-                            value: characterDisplay,
+                            value: chunks[0] || 'None',
                             inline: false
                         });
+
+                        // Add additional chunks if needed
+                        for (let i = 1; i < chunks.length && i < 3; i++) {
+                            embed.addFields({
+                                name: 'Continued...',
+                                value: chunks[i],
+                                inline: false
+                            });
+                        }
                     } else {
                         embed.setDescription('No characters are currently configured.');
                     }

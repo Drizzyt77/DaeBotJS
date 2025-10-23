@@ -13,11 +13,11 @@ const logger = require('../utils/logger');
 const raiderIOClient = new RaiderIOClient();
 
 /**
- * Gets the list of character names from configuration
- * @returns {Array<string>} Array of character names
+ * Gets the list of characters from configuration
+ * @returns {Array<Object>} Array of character objects with name, realm, and region
  * @throws {Error} If config.json is missing or malformed
  */
-function getCharacterNames() {
+function getCharacters() {
     try {
         const { characters } = require('../config.json');
 
@@ -27,13 +27,47 @@ function getCharacterNames() {
 
         if (characters.length === 0) {
             logger.warn('No characters configured in config.json');
+            return [];
         }
 
-        return characters;
+        // Handle both old format (array of strings) and new format (array of objects)
+        // This provides backward compatibility during migration
+        return characters.map(char => {
+            if (typeof char === 'string') {
+                // Old format: just character name
+                logger.debug('Converting legacy character format', { name: char });
+                return {
+                    name: char,
+                    realm: 'Thrall',  // Default realm for legacy entries
+                    region: 'us'       // Default region for legacy entries
+                };
+            } else if (typeof char === 'object' && char.name) {
+                // New format: object with name, realm, region
+                return {
+                    name: char.name,
+                    realm: char.realm || 'Thrall',
+                    region: char.region || 'us'
+                };
+            } else {
+                logger.warn('Invalid character entry in config', { char });
+                return null;
+            }
+        }).filter(char => char !== null);
+
     } catch (error) {
         logger.error('Failed to load character configuration', { error: error.message });
         throw new Error('Unable to load character configuration');
     }
+}
+
+/**
+ * Gets just the character names (for backward compatibility)
+ * @returns {Array<string>} Array of character names
+ * @deprecated Use getCharacters() instead
+ */
+function getCharacterNames() {
+    const characters = getCharacters();
+    return characters.map(char => char.name);
 }
 
 module.exports = {
@@ -52,34 +86,36 @@ module.exports = {
      * });
      */
     get_data: async function () {
-        const characterNames = getCharacterNames();
+        const characters = getCharacters();
 
-        if (characterNames.length === 0) {
+        if (characters.length === 0) {
             logger.warn('No characters to fetch mythic plus data for');
             return [];
         }
 
-        logger.info('Fetching mythic plus data', { characterCount: characterNames.length });
+        logger.info('Fetching mythic plus data', { characterCount: characters.length });
 
         try {
-            const data = await raiderIOClient.getMythicPlusData(characterNames);
+            const data = await raiderIOClient.getMythicPlusData(characters);
 
             // If RaiderIO returns incomplete results, fill in missing characters from database
-            if (data.length < characterNames.length) {
+            if (data.length < characters.length) {
                 logger.warn('RaiderIO returned incomplete data, attempting database fallback for missing characters', {
-                    requestedCharacters: characterNames.length,
+                    requestedCharacters: characters.length,
                     receivedCharacters: data.length,
-                    missingCount: characterNames.length - data.length
+                    missingCount: characters.length - data.length
                 });
 
                 try {
                     // Find which characters are missing from RaiderIO response
                     const receivedNames = data.map(char => char.name.toLowerCase());
-                    const missingNames = characterNames.filter(name => !receivedNames.includes(name.toLowerCase()));
+                    const missingCharacters = characters.filter(char => !receivedNames.includes(char.name.toLowerCase()));
 
-                    if (missingNames.length > 0) {
-                        logger.debug('Fetching missing characters from database', { missingNames });
-                        const dbData = getMythicPlusDataFromDB(missingNames);
+                    if (missingCharacters.length > 0) {
+                        logger.debug('Fetching missing characters from database', {
+                            missingCount: missingCharacters.length
+                        });
+                        const dbData = getMythicPlusDataFromDB(missingCharacters);
 
                         if (dbData.length > 0) {
                             logger.info('Successfully fetched missing characters from database', {
@@ -93,17 +129,17 @@ module.exports = {
                     logger.error('Database fallback failed for missing characters', { error: dbError.message });
                 }
 
-                logger.info('Returning partial RaiderIO data', { successCount: data.length, totalCount: characterNames.length });
+                logger.info('Returning partial RaiderIO data', { successCount: data.length, totalCount: characters.length });
                 return data;
             }
 
-            logger.info('Successfully fetched mythic plus data from RaiderIO', { successCount: data.length, totalCount: characterNames.length });
+            logger.info('Successfully fetched mythic plus data from RaiderIO', { successCount: data.length, totalCount: characters.length });
             return data;
         } catch (error) {
             logger.warn('RaiderIO API failed with error, attempting full database fallback', { error: error.message });
 
             try {
-                const dbData = getMythicPlusDataFromDB(characterNames);
+                const dbData = getMythicPlusDataFromDB(characters);
                 if (dbData.length > 0) {
                     logger.info('Successfully fetched mythic plus data from database fallback', { count: dbData.length });
                     return dbData;
@@ -132,18 +168,18 @@ module.exports = {
      * });
      */
     get_raid_data: async function () {
-        const characterNames = getCharacterNames();
+        const characters = getCharacters();
 
-        if (characterNames.length === 0) {
+        if (characters.length === 0) {
             logger.warn('No characters to fetch raid data for');
             return [];
         }
 
-        logger.info('Fetching raid progression data', { characterCount: characterNames.length });
+        logger.info('Fetching raid progression data', { characterCount: characters.length });
 
         try {
-            const data = await raiderIOClient.getRaidData(characterNames);
-            logger.info('Successfully fetched raid data', { successCount: data.length, totalCount: characterNames.length });
+            const data = await raiderIOClient.getRaidData(characters);
+            logger.info('Successfully fetched raid data', { successCount: data.length, totalCount: characters.length });
             return data;
         } catch (error) {
             logger.error('Failed to fetch character raid data', { error: error.message });

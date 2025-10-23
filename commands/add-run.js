@@ -7,22 +7,14 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const { getDatabase } = require('../database/mythic-runs-db');
+const { getConfigService } = require('../services/config-service');
 const logger = require('../utils/logger');
 
-// Current season
-const CURRENT_SEASON = 'season-tww-3';
-
-// Dungeon list for Season 3 TWW
-const DUNGEONS = [
-'Ara-Kara, City of Echoes',
-'Eco-Dome Al\'dani',
-'Halls of Atonement',
-'The Dawnbreaker',
-'Priory of the Sacred Flame',
-'Operation: Floodgate',
-'Tazavesh: So\'leah\'s Gambit',
-'Tazavesh: Streets of Wonder'
-];
+// Get dungeons and season from config service
+// Note: This is loaded at bot startup. To update dungeons, you must redeploy commands after changing settings
+const configService = getConfigService();
+const CURRENT_SEASON = configService.getCurrentSeasonName();
+const DUNGEONS = configService.getActiveDungeons();
 
 // Spec to role mapping
 const SPEC_ROLES = {
