@@ -15,13 +15,8 @@
 const { getDatabase } = require('../database/mythic-runs-db');
 const { RaiderIOClient } = require('./raiderio-client');
 const { BlizzardClient } = require('./blizzard-client');
+const { getConfigService } = require('./config-service');
 const logger = require('../utils/logger');
-
-/**
- * Current season identifier
- * Update this when a new season starts
- */
-const CURRENT_SEASON = 'season-tww-3';
 
 /**
  * RunCollector class
@@ -142,10 +137,11 @@ class RunCollector {
      * @returns {Promise<Object>} Collection results
      */
     async collectBestRuns(characterName, options = {}) {
+        const configService = getConfigService();
         const {
             realm = 'thrall',
             region = 'us',
-            season = CURRENT_SEASON
+            season = configService.getCurrentSeasonName()
         } = options;
 
         try {
@@ -307,10 +303,11 @@ class RunCollector {
      * @returns {Promise<Object>} Collection results
      */
     async collectCharacterRuns(characterName, options = {}) {
+        const configService = getConfigService();
         const {
             realm = 'thrall',
             region = 'us',
-            season = CURRENT_SEASON
+            season = configService.getCurrentSeasonName()
         } = options;
 
         try {
@@ -542,8 +539,10 @@ class RunCollector {
      */
     async collectConfigCharacters() {
         try {
-            const config = require('../config.json');
-            const characters = config.characters || [];
+            // Use the helper function to get properly formatted characters
+            const { getCharacters } = require('../helpers/get-data');
+            const characters = getCharacters();
+            const configService = getConfigService();
 
             if (characters.length === 0) {
                 logger.warn('No characters found in config.json');
@@ -556,14 +555,61 @@ class RunCollector {
                 };
             }
 
-            const realm = config.realm || 'thrall';
-            const region = config.region || 'us';
+            // Process each character with their specific realm/region
+            const results = [];
+            let summary = {
+                total_characters: characters.length,
+                successful: 0,
+                failed: 0,
+                total_runs_added: 0,
+                total_runs_skipped: 0,
+                started_at: new Date().toISOString()
+            };
 
-            return await this.collectMultipleCharacters(characters, {
-                realm,
-                region,
-                season: CURRENT_SEASON
-            });
+            for (const char of characters) {
+                try {
+                    logger.info('Collecting runs for character', {
+                        name: char.name,
+                        realm: char.realm,
+                        region: char.region
+                    });
+
+                    const result = await this.collectCharacterRuns(char.name, {
+                        realm: char.realm,
+                        region: char.region,
+                        season: configService.getCurrentSeasonName()
+                    });
+
+                    if (result.error) {
+                        summary.failed++;
+                    } else {
+                        summary.successful++;
+                        summary.total_runs_added += result.runs_added || 0;
+                        summary.total_runs_skipped += result.runs_skipped || 0;
+                    }
+
+                    results.push(result);
+
+                    // Small delay to be respectful of APIs
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                } catch (error) {
+                    logger.error('Failed to collect runs for character', {
+                        name: char.name,
+                        error: error.message
+                    });
+                    summary.failed++;
+                    results.push({
+                        character: char.name,
+                        error: error.message
+                    });
+                }
+            }
+
+            summary.completed_at = new Date().toISOString();
+            summary.results = results;
+
+            return summary;
 
         } catch (error) {
             logger.error('Failed to collect runs from config', {
@@ -580,8 +626,10 @@ class RunCollector {
      */
     async collectConfigCharactersBestRuns() {
         try {
-            const config = require('../config.json');
-            const characters = config.characters || [];
+            // Use the helper function to get properly formatted characters
+            const { getCharacters } = require('../helpers/get-data');
+            const characters = getCharacters();
+            const configService = getConfigService();
 
             if (characters.length === 0) {
                 logger.warn('No characters found in config.json');
@@ -594,14 +642,61 @@ class RunCollector {
                 };
             }
 
-            const realm = config.realm || 'thrall';
-            const region = config.region || 'us';
+            // Process each character with their specific realm/region
+            const results = [];
+            let summary = {
+                total_characters: characters.length,
+                successful: 0,
+                failed: 0,
+                total_runs_added: 0,
+                total_runs_skipped: 0,
+                started_at: new Date().toISOString()
+            };
 
-            return await this.collectBestRunsMultiple(characters, {
-                realm,
-                region,
-                season: CURRENT_SEASON
-            });
+            for (const char of characters) {
+                try {
+                    logger.info('Collecting best runs for character', {
+                        name: char.name,
+                        realm: char.realm,
+                        region: char.region
+                    });
+
+                    const result = await this.collectBestRuns(char.name, {
+                        realm: char.realm,
+                        region: char.region,
+                        season: configService.getCurrentSeasonName()
+                    });
+
+                    if (result.error) {
+                        summary.failed++;
+                    } else {
+                        summary.successful++;
+                        summary.total_runs_added += result.runs_added || 0;
+                        summary.total_runs_skipped += result.runs_skipped || 0;
+                    }
+
+                    results.push(result);
+
+                    // Small delay to be respectful of APIs
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                } catch (error) {
+                    logger.error('Failed to collect best runs for character', {
+                        name: char.name,
+                        error: error.message
+                    });
+                    summary.failed++;
+                    results.push({
+                        character: char.name,
+                        error: error.message
+                    });
+                }
+            }
+
+            summary.completed_at = new Date().toISOString();
+            summary.results = results;
+
+            return summary;
 
         } catch (error) {
             logger.error('Failed to collect best runs from config', {
@@ -622,6 +717,5 @@ class RunCollector {
 }
 
 module.exports = {
-    RunCollector,
-    CURRENT_SEASON
+    RunCollector
 };
