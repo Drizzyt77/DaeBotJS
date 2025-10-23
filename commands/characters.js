@@ -23,6 +23,7 @@
 const { SlashCommandBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const logger = require('../utils/logger');
 const weeklyCsvLogger = require('../utils/weekly-csv-logger');
+const { getConfigService } = require('../services/config-service');
 
 // Import notes system
 const notesManager = require('../utils/notes-manager');
@@ -436,7 +437,11 @@ async function handleCharacterSelectText(interaction, characters) {
             const linksData = getCharacterLinks().find(link => link.name === selectedCharacterName);
             const noDataEmbed = createNoDataEmbed(selectedCharacterName, linksData);
             const dungeons = extractUniqueDungeons(characters);
-            const availableSpecs = getAvailableSpecs(selectedCharacterName, { realm: 'thrall', region: 'us' });
+            const configService = getConfigService();
+            const availableSpecs = getAvailableSpecs(selectedCharacterName, {
+                realm: configService.getDefaultRealm(),
+                region: configService.getDefaultRegion()
+            });
             const components = createCharacterDetailComponents(
                 false,
                 characters,
@@ -548,7 +553,11 @@ async function handleCharacterSelect(interaction, characters) {
             const linksData = getCharacterLinks().find(link => link.name === selectedCharacterName);
             const noDataEmbed = createNoDataEmbed(selectedCharacterName, linksData);
             const dungeons = extractUniqueDungeons(characters);
-            const availableSpecs = getAvailableSpecs(selectedCharacterName, { realm: 'thrall', region: 'us' });
+            const configService = getConfigService();
+            const availableSpecs = getAvailableSpecs(selectedCharacterName, {
+                realm: configService.getDefaultRealm(),
+                region: configService.getDefaultRegion()
+            });
             const components = createCharacterDetailComponents(
                 false,
                 characters,
@@ -573,14 +582,14 @@ async function handleCharacterSelect(interaction, characters) {
 
         // Get available specs from database
         const availableSpecs = getAvailableSpecs(selectedCharacterName, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         // Enhance character with database runs (using 'Overall' by default)
         const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, 'Overall', {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         logger.debug('Enhanced character with database runs', {
@@ -793,14 +802,14 @@ async function handleSpecSelect(interaction, characters) {
 
         // Get available specs from database
         const availableSpecs = messageInfo.availableSpecs || getAvailableSpecs(characterName, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         // Enhance character with database runs filtered by selected spec
         const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, selectedSpec, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         logger.info('Character enhanced with database runs', {
@@ -930,14 +939,14 @@ async function handleViewModeChange(interaction, viewMode) {
 
         // Get available specs from database or message info
         const availableSpecs = messageInfo?.availableSpecs || getAvailableSpecs(selectedCharacterName, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         // Enhance character with database runs filtered by current spec
         const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, currentSpec, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         logger.debug('Character enhanced with database runs for view mode change', {
@@ -1901,14 +1910,14 @@ async function updateCharacterImageMessage(client, messageId, messageInfo) {
 
         // Get available specs from database or message info
         const availableSpecs = messageInfo.availableSpecs || getAvailableSpecs(messageInfo.characterName, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         // Enhance character with database runs filtered by selected spec
         const enhancedCharacter = enhanceCharacterWithDBRuns(selectedCharacter, selectedSpec, {
-            realm: 'thrall',
-            region: 'us'
+            realm: getConfigService().getDefaultRealm(),
+            region: getConfigService().getDefaultRegion()
         });
 
         // Generate updated character image with stored view mode

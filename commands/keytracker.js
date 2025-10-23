@@ -194,9 +194,11 @@ module.exports = {
 
             // Fallback to database if RaiderIO failed
             if (!character) {
+                const { getConfigService } = require('../services/config-service');
+                const config = getConfigService();
                 const dbData = getCharacterFromDB(normalizedCharacter, {
                     realm: normalizedRealm,
-                    region: 'us'
+                    region: config.getDefaultRegion()
                 });
 
                 if (dbData) {

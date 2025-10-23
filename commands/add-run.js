@@ -212,11 +212,10 @@ module.exports = {
             // Get database
             const db = getDatabase();
 
-            // Find or create character
+            // Find or create character (realm/region will use config defaults via upsertCharacter)
             const characterId = db.upsertCharacter({
                 name: characterName,
-                realm: 'thrall',
-                region: 'us',
+                // realm and region will use config defaults
                 class: 'Unknown', // We don't have this info
                 active_spec_name: specName,
                 active_spec_role: specRole

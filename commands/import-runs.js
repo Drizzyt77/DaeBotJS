@@ -237,11 +237,11 @@ Download the attached JSON file and fill in your runs.
                     const isTimed = run.result !== 'depleted';
                     const numUpgrades = run.result === '+3' ? 3 : run.result === '+2' ? 2 : run.result === '+1' ? 1 : 0;
 
-                    // Upsert character
+                    // Upsert character (realm/region will use config defaults if not provided)
                     const characterId = db.upsertCharacter({
                         name: run.character,
-                        realm: run.realm || 'thrall',
-                        region: run.region || 'us',
+                        realm: run.realm, // Falls back to config default via upsertCharacter
+                        region: run.region, // Falls back to config default via upsertCharacter
                         class: 'Unknown',
                         active_spec_name: run.spec,
                         active_spec_role: specRole

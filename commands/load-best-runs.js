@@ -46,11 +46,8 @@ module.exports = {
 
             let summary;
             if (characterName) {
-                // Collect for single character
-                const result = await collector.collectBestRuns(characterName, {
-                    realm: 'thrall',
-                    region: 'us'
-                });
+                // Collect for single character (realm/region will use config defaults)
+                const result = await collector.collectBestRuns(characterName);
 
                 summary = {
                     total_characters: 1,

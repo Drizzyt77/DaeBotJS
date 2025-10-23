@@ -352,8 +352,8 @@ module.exports = {
                 case 'add': {
                     const rawCharacterName = interaction.options.getString('character');
                     const characterName = validateCharacterName(rawCharacterName);
-                    const realm = interaction.options.getString('realm') || 'Thrall';
                     const configService = getConfigService();
+                    const realm = interaction.options.getString('realm') || configService.getDefaultRealm();
                     const region = interaction.options.getString('region') || configService.getDefaultRegion();
 
                     // Normalize realm capitalization
@@ -364,8 +364,8 @@ module.exports = {
                     // Check if character already exists
                     const existingChar = config.characters.find(char => {
                         const name = typeof char === 'string' ? char : char.name;
-                        const charRealm = typeof char === 'string' ? 'Thrall' : char.realm;
-                        const charRegion = typeof char === 'string' ? 'us' : char.region;
+                        const charRealm = typeof char === 'string' ? configService.getDefaultRealm() : char.realm;
+                        const charRegion = typeof char === 'string' ? configService.getDefaultRegion() : char.region;
                         return name.toLowerCase() === characterName.toLowerCase() &&
                                charRealm.toLowerCase() === normalizedRealm.toLowerCase() &&
                                charRegion.toLowerCase() === region.toLowerCase();
@@ -424,11 +424,12 @@ module.exports = {
                     // Get current character data
                     let currentChar = config.characters[charIndex];
                     if (typeof currentChar === 'string') {
-                        // Convert legacy format to new format
+                        // Convert legacy format to new format using config defaults
+                        const configService = getConfigService();
                         currentChar = {
                             name: currentChar,
-                            realm: 'Thrall',
-                            region: 'us'
+                            realm: configService.getDefaultRealm(),
+                            region: configService.getDefaultRegion()
                         };
                     }
 
