@@ -93,6 +93,43 @@ A Discord bot for tracking World of Warcraft Mythic+ progression with spec-speci
    node main.js
    ```
 
+## Updating the Bot
+
+### Automatic Update & Restart
+
+The easiest way to update your bot to the latest version:
+
+1. **Run the update script:**
+   ```bash
+   update-and-restart.bat
+   ```
+
+This will automatically:
+- Stop the current bot gracefully
+- Backup your database
+- Pull latest code from GitHub
+- Install new dependencies
+- Redeploy Discord slash commands
+- Restart the bot
+
+**What gets preserved:**
+- Your `config.json` settings
+- Your `.env` file
+- Your database (`mythic_runs.db`)
+- All your character data
+
+**Note:** Local changes to these files are automatically stashed and restored.
+
+### Manual Update
+
+If you prefer to update manually:
+
+1. Stop the bot (Ctrl+C)
+2. Pull latest code: `git pull origin main`
+3. Install dependencies: `npm install`
+4. Redeploy commands: `node deploy-commands.js`
+5. Start bot: `node main.js`
+
 ## Quick Start
 
 ### Initial Data Population
