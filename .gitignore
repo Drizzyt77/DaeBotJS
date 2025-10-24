@@ -13,7 +13,10 @@ yarn-error.log*
 
 # Debugging
 debugging
-update.md
+
+# Documentation (exclude all .md files except README.md)
+*.md
+!README.md
 
 # Config files
 config.json
@@ -49,3 +52,4 @@ src-tauri/
 public/
 ~/
 latest.json
+scripts/
