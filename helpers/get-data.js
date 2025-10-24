@@ -210,7 +210,7 @@ module.exports = {
      * });
      */
     get_mplus_data: async function () {
-        const characterNames = getCharacterNames();
+        const characterNames = getCharacters();
 
         if (characterNames.length === 0) {
             logger.warn('No characters to fetch M+ data for');
@@ -324,7 +324,7 @@ module.exports = {
      * });
      */
     get_gear_data: async function () {
-        const characterNames = getCharacterNames();
+        const characterNames = getCharacters();
 
         if (characterNames.length === 0) {
             logger.warn('No characters to fetch gear data for');
