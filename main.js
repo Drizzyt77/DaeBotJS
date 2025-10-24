@@ -53,6 +53,7 @@ client.commands = new Collection();
  * Load and register all slash commands from the commands directory
  * Automatically discovers and loads any .js files in the commands folder
  */
+logger.info("TESTING PROPER UPDATE RELEASE PROCESS");
 logger.info('Loading slash commands...');
 try {
     const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
