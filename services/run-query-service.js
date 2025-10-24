@@ -296,6 +296,5 @@ module.exports = {
     getBestRunsForUI,
     enhanceCharacterWithDBRuns,
     getRunCountsBySpec,
-    calculateResilientLevel,
-    CURRENT_SEASON
+    calculateResilientLevel
 };

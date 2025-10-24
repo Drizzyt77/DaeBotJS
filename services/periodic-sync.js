@@ -61,8 +61,20 @@ function stopPeriodicSync() {
  * @param {RunCollector} collector - RunCollector instance
  */
 async function runSync(collector) {
+    const statusTracker = global.statusTracker;
+
     try {
         logger.info('Starting scheduled run sync');
+
+        // Get character count for progress tracking
+        const { getCharacters } = require('../helpers/get-data');
+        const characters = getCharacters();
+        const characterCount = characters.length;
+
+        // Notify status tracker
+        if (statusTracker) {
+            statusTracker.startSync(characterCount);
+        }
 
         const startTime = Date.now();
         const summary = await collector.collectConfigCharacters();
@@ -74,6 +86,15 @@ async function runSync(collector) {
             duration_sec: (duration / 1000).toFixed(2)
         });
 
+        // Notify completion
+        if (statusTracker) {
+            statusTracker.completeSync({
+                runsAdded: summary.totalNewRuns || 0,
+                characterCount: summary.charactersProcessed || 0,
+                duration: duration
+            });
+        }
+
         // Log stats
         const stats = collector.getStats();
         logger.info('Database stats after sync', stats);
@@ -83,6 +104,11 @@ async function runSync(collector) {
             error: error.message,
             stack: error.stack
         });
+
+        // Notify error
+        if (statusTracker) {
+            statusTracker.errorSync(error.message);
+        }
     }
 }
 

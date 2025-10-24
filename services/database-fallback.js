@@ -228,6 +228,5 @@ module.exports = {
     getCharacterFromDB,
     getRecentRunsFromDB,
     getMythicPlusDataFromDB,
-    characterExistsInDB,
-    CURRENT_SEASON
+    characterExistsInDB
 };

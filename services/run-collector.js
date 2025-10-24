@@ -149,8 +149,9 @@ class RunCollector {
 
             // Fetch character data with best runs, alternate runs, AND recent runs
             // Recent runs is key for matching with Blizzard API spec data
+            const charObject = {name: characterName, realm: realm, region: region};
             const characterData = await this.raiderIO.fetchCharacterData(
-                [characterName],
+                charObject,
                 'mythic_plus_best_runs,mythic_plus_alternate_runs,mythic_plus_recent_runs,mythic_plus_scores_by_season:current,gear',
                 (rawData) => ({
                     name: rawData.name,
@@ -314,8 +315,9 @@ class RunCollector {
             logger.info('Collecting runs for character', { characterName, realm, region });
 
             // Fetch character data with recent runs AND current character info
+            const charObject = {name: characterName, realm: realm, region: region};
             const characterData = await this.raiderIO.fetchCharacterData(
-                [characterName],
+                [charObject],
                 'mythic_plus_recent_runs,mythic_plus_scores_by_season:current,gear',
                 (rawData) => ({
                     name: rawData.name,
