@@ -13,6 +13,7 @@ yarn-error.log*
 
 # Debugging
 debugging
+update.md
 
 # Config files
 config.json
@@ -39,3 +40,11 @@ coverage/
 *.sublime-workspace
 *.sublime-project
 data/
+
+# App
+index.html
+vite.config.js
+src/
+src-tauri/
+public/
+~/
