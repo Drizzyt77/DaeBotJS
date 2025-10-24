@@ -48,3 +48,4 @@ src/
 src-tauri/
 public/
 ~/
+latest.json
