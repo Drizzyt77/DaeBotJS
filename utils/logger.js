@@ -138,6 +138,19 @@ class Logger {
         const metadataStr = Object.keys(metadata).length > 0 ? ` | ${JSON.stringify(metadata)}` : '';
 
         console.log(`${color}[${timestamp}] ${level}: ${message}${metadataStr}${COLORS.RESET}`);
+
+        // Forward to Electron GUI if available
+        if (global.mainWindow && !global.mainWindow.isDestroyed()) {
+            try {
+                global.mainWindow.webContents.send('log-entry', {
+                    timestamp: logEntry.timestamp,
+                    level: level.toLowerCase(),
+                    message: message
+                });
+            } catch (error) {
+                // Silently fail if GUI is not available
+            }
+        }
     }
 
     /**
@@ -174,6 +187,15 @@ class Logger {
      */
     debug(message, metadata = {}) {
         this.writeLog('DEBUG', message, metadata);
+    }
+
+    /**
+     * Log success messages
+     * @param {string} message - Success message
+     * @param {Object} metadata - Additional success context
+     */
+    success(message, metadata = {}) {
+        this.writeLog('INFO', message, metadata); // Use INFO level but mark as success
     }
 
     /**
