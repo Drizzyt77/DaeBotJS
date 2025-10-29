@@ -18,9 +18,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const weeklyCsvLogger = require('../utils/weekly-csv-logger');
 const { getConfigService } = require('../services/config-service');
-
-// Path to the config file
-const CONFIG_PATH = path.join(__dirname, '../config.json');
+const { getConfigPath } = require('../utils/app-paths');
 
 /**
  * Color scheme for different embed states
@@ -52,7 +50,8 @@ const COMMON_REALMS = [
  */
 function loadConfig() {
     try {
-        const configData = fs.readFileSync(CONFIG_PATH, 'utf8');
+        const configPath = getConfigPath();
+        const configData = fs.readFileSync(configPath, 'utf8');
         return JSON.parse(configData);
     } catch (error) {
         logger.error('Error loading config', { error: error.message });
@@ -66,7 +65,8 @@ function loadConfig() {
  */
 function saveConfig(config) {
     try {
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 4));
+        const configPath = getConfigPath();
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     } catch (error) {
         logger.error('Error saving config', { error: error.message });
         throw new Error('Failed to save configuration file');

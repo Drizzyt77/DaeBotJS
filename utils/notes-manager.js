@@ -14,7 +14,13 @@ const logger = require('./logger');
 class NotesManager {
     constructor() {
         // Create data directory if it doesn't exist
-        this.dataDir = path.join(__dirname, '../data');
+        // When running in pkg, use AppData directory instead of snapshot
+        if (process.pkg) {
+            const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+            this.dataDir = path.join(appDataDir, 'com.daebot.app', 'data');
+        } else {
+            this.dataDir = path.join(__dirname, '../data');
+        }
         this.notesFilePath = path.join(this.dataDir, 'notes.json');
 
         if (!fs.existsSync(this.dataDir)) {

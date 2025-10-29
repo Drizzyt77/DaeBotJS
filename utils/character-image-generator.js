@@ -236,6 +236,13 @@ async function initializeImageCache() {
     }
 
     try {
+        // Skip cache initialization when running in pkg - images will be loaded on demand
+        if (process.pkg) {
+            logger.info('Running in pkg mode - skipping image cache pre-loading (images loaded on demand)');
+            imageCache.initialized = true;
+            return;
+        }
+
         // Load dungeon images
         const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
         const dungeonFiles = await fs.readdir(dungeonDir);

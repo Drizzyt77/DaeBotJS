@@ -5,9 +5,11 @@
  * Falls back to local database when RaiderIO is unavailable
  */
 
+const fs = require('fs');
 const { RaiderIOClient } = require('../services/raiderio-client');
 const { getRecentRunsFromDB, getMythicPlusDataFromDB } = require('../services/database-fallback');
 const logger = require('../utils/logger');
+const { getConfigPath } = require('../utils/app-paths');
 
 // Initialize the RaiderIO API client
 const raiderIOClient = new RaiderIOClient();
@@ -19,7 +21,10 @@ const raiderIOClient = new RaiderIOClient();
  */
 function getCharacters() {
     try {
-        const { characters } = require('../config.json');
+        const configPath = getConfigPath();
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = JSON.parse(configContent);
+        const { characters } = config;
 
         if (!Array.isArray(characters)) {
             throw new Error('Characters configuration must be an array');
@@ -34,7 +39,7 @@ function getCharacters() {
         // This provides backward compatibility during migration
         // Get config defaults
         const { getConfigService } = require('../services/config-service');
-        const config = getConfigService();
+        const configService = getConfigService();
 
         return characters.map(char => {
             if (typeof char === 'string') {
@@ -42,15 +47,15 @@ function getCharacters() {
                 logger.debug('Converting legacy character format', { name: char });
                 return {
                     name: char,
-                    realm: config.getDefaultRealm(),
-                    region: config.getDefaultRegion()
+                    realm: configService.getDefaultRealm(),
+                    region: configService.getDefaultRegion()
                 };
             } else if (typeof char === 'object' && char.name) {
                 // New format: object with name, realm, region - use config defaults as fallback
                 return {
                     name: char.name,
-                    realm: char.realm || config.getDefaultRealm(),
-                    region: char.region || config.getDefaultRegion()
+                    realm: char.realm || configService.getDefaultRealm(),
+                    region: char.region || configService.getDefaultRegion()
                 };
             } else {
                 logger.warn('Invalid character entry in config', { char });

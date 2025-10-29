@@ -20,6 +20,7 @@
 const fs = require("fs");
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
+const { getConfigPath } = require('./utils/app-paths');
 
 /**
  * Load and validate configuration required for command registration
@@ -27,7 +28,9 @@ const { Routes } = require('discord-api-types/v9');
 let clientId, guildId, token;
 
 try {
-    const config = require('./config.json');
+    const configPath = getConfigPath();
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configContent);
     ({ clientId, guildId, token } = config);
 
     // Validate required configuration values

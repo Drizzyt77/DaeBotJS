@@ -349,18 +349,24 @@ function createCharacterDetailComponents(includeRefresh = true, characters = [],
 
 /**
  * Creates the dungeon comparison view components
+ * @param {Array} characters - Array of character objects for character dropdown
+ * @param {Set|Array} dungeons - Set or array of dungeon names for dungeon dropdown
  * @param {boolean} includeRefresh - Whether to include the refresh button
  * @returns {Array} Array of ActionRowBuilder components
  */
-function createDungeonComparisonComponents(includeRefresh = true) {
+function createDungeonComparisonComponents(characters, dungeons, includeRefresh = true) {
     const buttons = [createMainMenuButton()];
 
     if (includeRefresh) {
         buttons.push(createRefreshButton());
     }
 
+    // Each select menu needs its own ActionRow
+    const characterRow = new ActionRowBuilder().addComponents(createCharacterSelectMenu(characters));
+    const dungeonRow = new ActionRowBuilder().addComponents(createDungeonSelectMenu(dungeons));
     const buttonRow = new ActionRowBuilder().addComponents(buttons);
-    return [buttonRow];
+
+    return [characterRow, dungeonRow, buttonRow];
 }
 
 /**

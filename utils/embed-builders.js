@@ -413,7 +413,26 @@ function createRaidProgressionEmbed(raidData) {
 
         Object.keys(roleGroups).forEach(role => {
             if (roleGroups[role].length > 0) {
-                const roleData = roleGroups[role]
+                // Sort characters within each role by difficulty (M > H > N) and then by progress
+                const sortedCharacters = roleGroups[role].sort((a, b) => {
+                    const aDifficulty = a.raidData.mythic > 0 ? 'M' : a.raidData.heroic > 0 ? 'H' : 'N';
+                    const bDifficulty = b.raidData.mythic > 0 ? 'M' : b.raidData.heroic > 0 ? 'H' : 'N';
+
+                    // Difficulty priority: M (0) > H (1) > N (2)
+                    const difficultyOrder = { 'M': 0, 'H': 1, 'N': 2 };
+                    const difficultyCompare = difficultyOrder[aDifficulty] - difficultyOrder[bDifficulty];
+
+                    if (difficultyCompare !== 0) {
+                        return difficultyCompare; // Sort by difficulty first
+                    }
+
+                    // Within same difficulty, sort by progress (higher kills first)
+                    const aProgress = a.raidData[aDifficulty === 'M' ? 'mythic' : aDifficulty === 'H' ? 'heroic' : 'normal'];
+                    const bProgress = b.raidData[bDifficulty === 'M' ? 'mythic' : bDifficulty === 'H' ? 'heroic' : 'normal'];
+                    return bProgress - aProgress;
+                });
+
+                const roleData = sortedCharacters
                     .map(char => {
                         const progress = char.raidData.summary || `0/${char.raidData.total_bosses}`;
                         return `**${char.name}** - ${progress}`;

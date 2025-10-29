@@ -17,8 +17,18 @@ const fs = require('fs');
 const logger = require('../utils/logger');
 
 // Database configuration
-const DB_DIR = path.join(__dirname, '../data');
-const DB_PATH = path.join(DB_DIR, 'mythic_runs.db'); // Reuse existing database
+// When running in pkg, use AppData directory instead of snapshot
+let DB_DIR, DB_PATH;
+if (process.pkg) {
+    // Running inside pkg - use AppData
+    const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+    DB_DIR = path.join(appDataDir, 'com.daebot.app', 'data');
+    DB_PATH = path.join(DB_DIR, 'mythic_runs.db'); // Reuse existing database
+} else {
+    // Running normally - use project directory
+    DB_DIR = path.join(__dirname, '../data');
+    DB_PATH = path.join(DB_DIR, 'mythic_runs.db'); // Reuse existing database
+}
 
 /**
  * Database schema version for migrations

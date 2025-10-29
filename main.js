@@ -13,14 +13,21 @@
  * - Character command auto-refresh initialization
  */
 
-// Load environment variables from .env file
-require('dotenv').config();
-
 const fs = require('fs');
 const { Collection } = require('discord.js');
 const path = require('node:path');
 const { client } = require('./global_vars/vars');
 const logger = require('./utils/logger');
+const { getConfigPath, getEnvPath } = require('./utils/app-paths');
+
+// Load environment variables from .env file in AppData
+const envPath = getEnvPath();
+if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath });
+    logger.info('.env loaded from AppData', { path: envPath });
+} else {
+    logger.warn('.env not found in AppData', { path: envPath });
+}
 
 /**
  * Load configuration and validate required settings
@@ -28,18 +35,28 @@ const logger = require('./utils/logger');
  */
 let token;
 try {
-    const config = require('./config.json');
+    const configPath = getConfigPath();
+
+    if (!fs.existsSync(configPath)) {
+        throw new Error(`config.json not found at ${configPath}`);
+    }
+
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configContent);
     token = config.token;
 
     if (!token) {
         throw new Error('Bot token is missing from config.json');
     }
 
-    logger.info('Configuration loaded successfully', { charactersCount: config.characters?.length || 0 });
+    logger.info('Configuration loaded successfully from AppData', {
+        path: configPath,
+        charactersCount: config.characters?.length || 0
+    });
 } catch (error) {
     logger.error('Failed to load configuration', { error: error.message });
     console.error('Failed to load configuration:', error.message);
-    console.error('Please ensure config.json exists and contains a valid bot token');
+    console.error('Please ensure config.json exists in AppData and contains a valid bot token');
     process.exit(1);
 }
 
@@ -52,24 +69,40 @@ client.commands = new Collection();
 /**
  * Load and register all slash commands from the commands directory
  * Automatically discovers and loads any .js files in the commands folder
+ * Works both in normal mode and when bundled with pkg
  */
-logger.info("TESTING PROPER UPDATE RELEASE PROCESS");
 logger.info('Loading slash commands...');
 try {
-    const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
-
-    for (const file of commandFiles) {
-        logger.debug(`Loading command: ${file}`);
-        const command = require(`./commands/${file}`);
-
-        // Validate command structure
-        if (!command.data || !command.execute) {
-            logger.warn(`Command ${file} is missing required 'data' or 'execute' properties`);
-            continue;
+    if (process.pkg) {
+        // Running in pkg - use the index file that explicitly requires all commands
+        const commands = require('./commands/index.js');
+        for (const [fileName, command] of Object.entries(commands)) {
+            if (!command.data || !command.execute) {
+                logger.warn(`Command ${fileName} is missing required 'data' or 'execute' properties`);
+                continue;
+            }
+            client.commands.set(command.data.name, command);
+            logger.debug(`✓ Loaded command: ${command.data.name}`);
         }
+    } else {
+        // Running normally - use fs to discover commands
+        const commandsPath = path.join(__dirname, 'commands');
+        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js') && file !== 'index.js');
 
-        client.commands.set(command.data.name, command);
-        logger.debug(`✓ Loaded command: ${command.data.name}`);
+        for (const file of commandFiles) {
+            logger.debug(`Loading command: ${file}`);
+            const commandPath = path.join(commandsPath, file);
+            const command = require(commandPath);
+
+            // Validate command structure
+            if (!command.data || !command.execute) {
+                logger.warn(`Command ${file} is missing required 'data' or 'execute' properties`);
+                continue;
+            }
+
+            client.commands.set(command.data.name, command);
+            logger.debug(`✓ Loaded command: ${command.data.name}`);
+        }
     }
 
     logger.info(`Successfully loaded ${client.commands.size} commands`, { commandCount: client.commands.size });
@@ -81,34 +114,59 @@ try {
 /**
  * Load and register all event handlers from the events directory
  * Supports both one-time (once) and recurring (on) event listeners
+ * Works both in normal mode and when bundled with pkg
  */
 logger.info('Loading event handlers...');
 try {
-    const eventsPath = path.join(__dirname, 'events');
-    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+    if (process.pkg) {
+        // Running in pkg - use the index file that explicitly requires all events
+        const events = require('./events/index.js');
+        let eventCount = 0;
+        for (const [fileName, event] of Object.entries(events)) {
+            if (!event.name || !event.execute) {
+                logger.warn(`Event ${fileName} is missing required 'name' or 'execute' properties`);
+                continue;
+            }
 
-    for (const file of eventFiles) {
-        logger.debug(`Loading event handler: ${file}`);
-        const filePath = path.join(eventsPath, file);
-        const event = require(filePath);
+            // Register event listener based on type
+            if (event.once) {
+                client.once(event.name, (...args) => event.execute(...args));
+                logger.debug(`✓ Registered one-time event: ${event.name}`);
+            } else {
+                client.on(event.name, (...args) => event.execute(...args));
+                logger.debug(`✓ Registered recurring event: ${event.name}`);
+            }
+            eventCount++;
+        }
+        logger.info('Event handlers loaded successfully', { eventCount });
+    } else {
+        // Running normally - use fs to discover events
+        const eventsPath = path.join(__dirname, 'events');
+        const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js') && file !== 'index.js');
 
-        // Validate event structure
-        if (!event.name || !event.execute) {
-            logger.warn(`Event ${file} is missing required 'name' or 'execute' properties`);
-            continue;
+        for (const file of eventFiles) {
+            logger.debug(`Loading event handler: ${file}`);
+            const filePath = path.join(eventsPath, file);
+            const event = require(filePath);
+
+            // Validate event structure
+            if (!event.name || !event.execute) {
+                logger.warn(`Event ${file} is missing required 'name' or 'execute' properties`);
+                continue;
+            }
+
+            // Register event listener based on type
+            if (event.once) {
+                client.once(event.name, (...args) => event.execute(...args));
+                logger.debug(`✓ Registered one-time event: ${event.name}`);
+            } else {
+                client.on(event.name, (...args) => event.execute(...args));
+                logger.debug(`✓ Registered recurring event: ${event.name}`);
+            }
         }
 
-        // Register event listener based on type
-        if (event.once) {
-            client.once(event.name, (...args) => event.execute(...args));
-            logger.debug(`✓ Registered one-time event: ${event.name}`);
-        } else {
-            client.on(event.name, (...args) => event.execute(...args));
-            logger.debug(`✓ Registered recurring event: ${event.name}`);
-        }
+        logger.info('Event handlers loaded successfully', { eventCount: eventFiles.length });
     }
-
-    logger.info('Event handlers loaded successfully', { eventCount: eventFiles.length });
 } catch (error) {
     logger.error('Error loading event handlers', { error: error.message });
     process.exit(1);

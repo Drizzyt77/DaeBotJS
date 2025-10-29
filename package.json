@@ -1,6 +1,6 @@
 {
   "name": "daebot",
-  "version": "1.0.1",
+  "version": "1.0.9",
   "description": "World of Warcraft Guild Management Discord Bot",
   "main": "main.js",
   "author": "Drizzyt",
@@ -9,10 +9,12 @@
     "start": "node main.js",
     "dev": "vite",
     "build": "vite build",
+    "build:bot": "pkg main.js --targets node20-win-x64 --output dist/bot.exe --compress Brotli && node scripts/copy-native-modules.js",
     "deploy": "node deploy-commands.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "version": "node scripts/update-version.js",
     "release": "node scripts/build-release.js"
   },
   "dependencies": {
@@ -25,8 +27,28 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "@yao-pkg/pkg": "^6.9.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "vite": "^5.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "commands/**/*.js",
+      "events/**/*.js",
+      "helpers/**/*.js",
+      "services/**/*.js",
+      "utils/**/*.js",
+      "global_vars/**/*.js",
+      "images/**/*",
+      "config.json",
+      "node_modules/better-sqlite3/build/Release/*.node",
+      "node_modules/canvas/build/Release/*.node",
+      "node_modules/canvas/build/Release/*.dll"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
   }
 }

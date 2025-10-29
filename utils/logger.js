@@ -43,7 +43,16 @@ const COLORS = {
 class Logger {
     constructor() {
         // Create logs directory if it doesn't exist
-        this.logsDir = path.join(__dirname, '../logs');
+        // When running in pkg, use AppData directory instead of snapshot
+        if (process.pkg) {
+            // Running inside pkg - use AppData
+            const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+            this.logsDir = path.join(appDataDir, 'com.daebot.app', 'logs');
+        } else {
+            // Running normally - use project directory
+            this.logsDir = path.join(__dirname, '../logs');
+        }
+
         if (!fs.existsSync(this.logsDir)) {
             fs.mkdirSync(this.logsDir, { recursive: true });
         }

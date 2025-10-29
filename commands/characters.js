@@ -742,9 +742,12 @@ async function handleDungeonSelect(interaction, characters) {
 
         const selectedDungeon = interaction.values[0];
 
+        // Extract unique dungeons for the dropdown
+        const dungeons = extractUniqueDungeons(characters);
+
         // Create dungeon comparison embed
         const dungeonEmbed = createDungeonComparisonEmbed(selectedDungeon, characters);
-        const components = createDungeonComparisonComponents(true);
+        const components = createDungeonComparisonComponents(characters, dungeons, true);
 
         await interaction.editReply({
             embeds: [dungeonEmbed],
@@ -754,7 +757,8 @@ async function handleDungeonSelect(interaction, characters) {
     } catch (error) {
         logger.error('Error in handleDungeonSelect', { error: error.message, stack: error.stack });
         const errorEmbed = createErrorEmbed('Failed to load dungeon comparison.');
-        const components = createDungeonComparisonComponents(false);
+        const dungeons = extractUniqueDungeons(characters);
+        const components = createDungeonComparisonComponents(characters, dungeons, false);
 
         await interaction.editReply({
             embeds: [errorEmbed],

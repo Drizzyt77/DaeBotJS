@@ -11,9 +11,11 @@
  * - Stores price history in database
  */
 
+const fs = require('fs');
 const { EmbedBuilder } = require('discord.js');
 const logger = require('../utils/logger');
 const { getTokenDatabase } = require('../database/token-db');
+const { getConfigPath } = require('../utils/app-paths');
 
 // Token API configuration
 const TOKEN_API_URL = 'https://data.wowtoken.app/v2/current/retail.json';
@@ -295,7 +297,9 @@ class TokenTracker {
      */
     async sendChannelNotification(embed) {
         try {
-            const config = require('../config.json');
+            const configPath = getConfigPath();
+            const configContent = fs.readFileSync(configPath, 'utf8');
+            const config = JSON.parse(configContent);
 
             if (!config.tokenChannel) {
                 logger.warn('No tokenChannel configured, skipping channel notification');

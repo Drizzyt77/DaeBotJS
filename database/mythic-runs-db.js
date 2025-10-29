@@ -27,8 +27,20 @@ function getConfigService() {
 }
 
 // Database configuration
-const DB_DIR = path.join(__dirname, '../data');
-const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
+// When running in pkg, use AppData directory instead of snapshot
+let DB_DIR, DB_PATH;
+if (process.pkg) {
+    // Running inside pkg - use AppData
+    logger.warn('Running in pkg mode - using AppData directory for database storage');
+    const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+    DB_DIR = path.join(appDataDir, 'com.daebot.app', 'data');
+    DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
+} else {
+    // Running normally - use project directory
+    logger.warn('Running in normal mode - using project directory for database storage');
+    DB_DIR = path.join(__dirname, '../data');
+    DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
+}
 
 /**
  * Database schema version for migrations
