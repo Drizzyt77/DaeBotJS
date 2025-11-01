@@ -54,9 +54,27 @@ try {
         charactersCount: config.characters?.length || 0
     });
 } catch (error) {
+    const errorMessage = `CONFIGURATION ERROR: ${error.message}\n\n` +
+        `Please ensure:\n` +
+        `1. config.json exists in: ${getConfigPath()}\n` +
+        `2. config.json contains a valid Discord bot token\n` +
+        `3. config.json has proper JSON formatting\n\n` +
+        `Use the Settings page in the app to configure your bot.`;
+
     logger.error('Failed to load configuration', { error: error.message });
-    console.error('Failed to load configuration:', error.message);
-    console.error('Please ensure config.json exists in AppData and contains a valid bot token');
+    console.error('\n' + '='.repeat(70));
+    console.error(errorMessage);
+    console.error('='.repeat(70) + '\n');
+
+    // Write error to a file that the GUI can check
+    try {
+        const { getAppDataDir } = require('./utils/app-paths');
+        const errorPath = path.join(getAppDataDir(), 'startup-error.txt');
+        fs.writeFileSync(errorPath, errorMessage + '\n\nTimestamp: ' + new Date().toISOString());
+    } catch (writeError) {
+        console.error('Could not write error file:', writeError.message);
+    }
+
     process.exit(1);
 }
 
@@ -228,6 +246,10 @@ process.on('SIGINT', () => {
         logger.info('Discord client connection terminated');
 
         logger.info('Bot shutdown completed successfully');
+
+        // Close logger stream
+        logger.close();
+
         process.exit(0);
 
     } catch (error) {
@@ -255,6 +277,7 @@ initializeImageCache();
  * This initiates the connection to Discord and triggers the 'ready' event
  */
 logger.info('Starting Discord bot');
+logger.info('Bot initialization complete, logging in to Discord...');
 client.login(token)
     .then(() => {
         logger.info('Bot login initiated successfully');

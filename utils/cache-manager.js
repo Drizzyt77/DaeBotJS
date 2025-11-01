@@ -363,8 +363,25 @@ class CharacterCacheManager extends CacheManager {
     }
 }
 
+// Create singleton instance for character cache
+// This ensures all parts of the app use the same cache
+let characterCacheInstance = null;
+
+/**
+ * Gets or creates the singleton character cache manager instance
+ * @param {Object} customDurations - Optional custom cache durations
+ * @returns {CharacterCacheManager} Singleton cache manager instance
+ */
+function getCharacterCacheManager(customDurations = {}) {
+    if (!characterCacheInstance) {
+        characterCacheInstance = new CharacterCacheManager(customDurations);
+    }
+    return characterCacheInstance;
+}
+
 module.exports = {
     CacheManager,
     CharacterCacheManager,
+    getCharacterCacheManager,
     DEFAULT_CACHE_DURATIONS
 };

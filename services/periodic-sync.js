@@ -3,16 +3,21 @@
  *
  * Automatically collects M+ runs on a schedule.
  * Runs every hour by default to keep the database up to date with recent runs.
+ * Also populates the character command cache to prevent re-fetching after sync.
  */
 
 const { RunCollector } = require('./run-collector');
 const logger = require('../utils/logger');
+const { getCharacterCacheManager } = require('../utils/cache-manager');
 
 // Sync interval in milliseconds (default: 1 hour)
 const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 // Interval reference for cleanup
 let syncInterval = null;
+
+// Get singleton cache manager for populating cache after sync
+const cacheManager = getCharacterCacheManager();
 
 /**
  * Start periodic sync
@@ -98,6 +103,30 @@ async function runSync(collector) {
         // Log stats
         const stats = collector.getStats();
         logger.info('Database stats after sync', stats);
+
+        // Populate cache with fresh data after successful sync
+        // This prevents the character command from re-fetching data
+        try {
+            const data = require('../helpers/get-data');
+            const characterData = await data.get_data();
+
+            // Populate all relevant caches
+            cacheManager.setCharacterData(characterData, false);
+
+            // Also fetch and cache raid data
+            const raidData = await data.get_raid_data();
+            cacheManager.setRaidData(raidData);
+
+            logger.info('Cache populated after sync', {
+                characterCount: characterData.length,
+                cacheValid: true
+            });
+        } catch (cacheError) {
+            logger.warn('Failed to populate cache after sync', {
+                error: cacheError.message
+            });
+            // Don't fail the sync if cache population fails
+        }
 
     } catch (error) {
         logger.error('Scheduled sync failed', {

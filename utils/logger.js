@@ -42,33 +42,69 @@ const COLORS = {
  */
 class Logger {
     constructor() {
-        // Create logs directory if it doesn't exist
-        // When running in pkg, use AppData directory instead of snapshot
-        if (process.pkg) {
-            // Running inside pkg - use AppData
-            const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
-            this.logsDir = path.join(appDataDir, 'com.daebot.app', 'logs');
-        } else {
-            // Running normally - use project directory
-            this.logsDir = path.join(__dirname, '../logs');
+        try {
+            // Create logs directory if it doesn't exist
+            // When running in pkg, use AppData directory instead of snapshot
+            if (process.pkg) {
+                // Running inside pkg - use AppData
+                const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+                this.logsDir = path.join(appDataDir, 'com.daebot.app', 'logs');
+            } else {
+                // Running normally - use project directory
+                this.logsDir = path.join(__dirname, '../logs');
+            }
+
+            console.log('Logger initializing, logs directory:', this.logsDir);
+
+            if (!fs.existsSync(this.logsDir)) {
+                fs.mkdirSync(this.logsDir, { recursive: true });
+                console.log('Created logs directory');
+            }
+
+            // Clean up old log files (older than 1 week)
+            this.cleanupOldLogs();
+
+            // Set default log level from environment or INFO
+            this.logLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toUpperCase()] ?? LOG_LEVELS.INFO;
+
+            // Track current log file date for rotation
+            this.currentLogDate = this.getCurrentDateString();
+            this.runStartTime = new Date();
+            this.logFilePath = this.getLogFilePath();
+            this.lineCount = 0;
+            this.maxLinesPerFile = 10000; // Rotate after 10k lines to prevent huge files
+            this.fileLoggingEnabled = false; // Track if file logging is working
+
+            console.log('Log file path:', this.logFilePath);
+
+            // Write current log file path to a marker file so Rust backend can find it
+            this.updateCurrentLogMarker();
+
+            // Create write stream for async file writing (prevents blocking)
+            this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+            this.logStream.on('error', (err) => {
+                console.error('Log stream error:', err);
+                this.fileLoggingEnabled = false;
+            });
+            this.logStream.on('open', () => {
+                this.fileLoggingEnabled = true;
+                console.log('Log stream opened successfully');
+            });
+
+            // Initialize log file with startup message
+            this.info('Logger initialized', {
+                logLevel: Object.keys(LOG_LEVELS)[this.logLevel],
+                logFile: this.logFilePath,
+                pid: process.pid
+            });
+
+        } catch (error) {
+            // If logger fails to initialize, ensure errors go to console
+            console.error('CRITICAL: Logger initialization failed:', error);
+            console.error('Stack:', error.stack);
+            this.fileLoggingEnabled = false;
+            // Don't throw - allow app to continue with console-only logging
         }
-
-        if (!fs.existsSync(this.logsDir)) {
-            fs.mkdirSync(this.logsDir, { recursive: true });
-        }
-
-        // Set default log level from environment or INFO
-        this.logLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toUpperCase()] ?? LOG_LEVELS.INFO;
-
-        // Track current log file date for rotation
-        this.currentLogDate = this.getCurrentDateString();
-        this.logFilePath = this.getLogFilePath();
-
-        // Initialize log file with startup message
-        this.info('Logger initialized', {
-            logLevel: Object.keys(LOG_LEVELS)[this.logLevel],
-            logFile: this.logFilePath
-        });
     }
 
     /**
@@ -80,22 +116,116 @@ class Logger {
     }
 
     /**
-     * Gets the log file path for the current date
+     * Gets the log file path for the current run
      * @returns {string} Full path to current log file
      */
     getLogFilePath() {
-        return path.join(this.logsDir, `daebot-${this.getCurrentDateString()}.log`);
+        // Format: daebot-YYYY-MM-DD-HHMMSS-PID.log
+        const now = this.runStartTime || new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        const timestamp = `${year}-${month}-${day}-${hours}${minutes}${seconds}`;
+        return path.join(this.logsDir, `daebot-${timestamp}-${process.pid}.log`);
     }
 
     /**
-     * Rotates log file if date has changed
+     * Updates the current log marker file
+     * This file tells the Rust backend which log file is currently active
+     */
+    updateCurrentLogMarker() {
+        try {
+            const markerPath = path.join(this.logsDir, 'current.log');
+            fs.writeFileSync(markerPath, this.logFilePath);
+        } catch (error) {
+            console.error('Failed to update log marker:', error);
+        }
+    }
+
+    /**
+     * Cleans up old log files (older than 1 week)
+     * Called during logger initialization to prevent log accumulation
+     */
+    cleanupOldLogs() {
+        try {
+            const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
+            const files = fs.readdirSync(this.logsDir);
+
+            let deletedCount = 0;
+            let deletedSize = 0;
+
+            for (const file of files) {
+                // Only process log files (not current.log marker)
+                if (file.startsWith('daebot-') && file.endsWith('.log')) {
+                    const filePath = path.join(this.logsDir, file);
+
+                    try {
+                        const stats = fs.statSync(filePath);
+
+                        // Delete if file is older than 1 week
+                        if (stats.mtimeMs < oneWeekAgo) {
+                            fs.unlinkSync(filePath);
+                            deletedCount++;
+                            deletedSize += stats.size;
+                            console.log(`Deleted old log file: ${file} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to process log file ${file}:`, error.message);
+                    }
+                }
+            }
+
+            if (deletedCount > 0) {
+                console.log(`Cleanup completed: Deleted ${deletedCount} old log file(s), freed ${(deletedSize / 1024 / 1024).toFixed(2)} MB`);
+            }
+        } catch (error) {
+            console.error('Failed to cleanup old logs:', error);
+            // Don't throw - log cleanup failure shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Rotates log file if date has changed or line limit reached
      */
     rotateLogIfNeeded() {
         const currentDate = this.getCurrentDateString();
-        if (currentDate !== this.currentLogDate) {
-            this.currentLogDate = currentDate;
+        const needsDateRotation = currentDate !== this.currentLogDate;
+        const needsLineRotation = this.lineCount >= this.maxLinesPerFile;
+
+        if (needsDateRotation || needsLineRotation) {
+            const oldPath = this.logFilePath;
+
+            // Update tracking variables
+            if (needsDateRotation) {
+                this.currentLogDate = currentDate;
+            }
+            this.runStartTime = new Date(); // New run timestamp for rotated file
+            this.lineCount = 0;
+
             this.logFilePath = this.getLogFilePath();
-            this.info('Log file rotated', { newFile: this.logFilePath });
+
+            // Close old stream and create new one for new file
+            if (this.logStream) {
+                this.logStream.end();
+            }
+            this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+            this.logStream.on('error', (err) => {
+                console.error('Log stream error:', err);
+            });
+
+            // Update marker file
+            this.updateCurrentLogMarker();
+
+            const reason = needsDateRotation ? 'date change' : 'line limit reached';
+            this.info('Log file rotated', {
+                reason,
+                oldFile: path.basename(oldPath),
+                newFile: path.basename(this.logFilePath)
+            });
         }
     }
 
@@ -133,12 +263,19 @@ class Logger {
         // Format the log entry
         const logEntry = this.formatLogEntry(level, message, metadata);
 
-        // Write to file
+        // Write to file asynchronously using stream (non-blocking)
         try {
             const logLine = JSON.stringify(logEntry) + '\n';
-            fs.appendFileSync(this.logFilePath, logLine);
+            if (this.logStream && this.logStream.writable && this.fileLoggingEnabled) {
+                this.logStream.write(logLine);
+                this.lineCount++;
+            } else if (!this.fileLoggingEnabled) {
+                // File logging disabled, all output goes to console only
+                // This is already handled by console.log below
+            }
         } catch (error) {
             console.error('Failed to write to log file:', error);
+            this.fileLoggingEnabled = false;
         }
 
         // Write to console with color coding
@@ -316,6 +453,21 @@ class Logger {
                 error: 'Unable to get log statistics',
                 details: error.message
             };
+        }
+    }
+
+    /**
+     * Close the log stream gracefully
+     */
+    close() {
+        try {
+            if (this.logStream && this.logStream.writable) {
+                this.logStream.end();
+                this.logStream = null;
+                console.log('Log stream closed');
+            }
+        } catch (error) {
+            console.error('Error closing log stream:', error);
         }
     }
 }

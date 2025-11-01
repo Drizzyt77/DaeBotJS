@@ -47,7 +47,7 @@ const {
 } = require('../utils/notes-embeds');
 
 // Import utility modules
-const { CharacterCacheManager } = require('../utils/cache-manager');
+const { getCharacterCacheManager } = require('../utils/cache-manager');
 const {
     createMainMenuComponents,
     createCharacterDetailComponents,
@@ -78,8 +78,8 @@ const { enhanceCharacterWithDBRuns, getAvailableSpecs } = require('../services/r
 
 // Custom class icons are now loaded directly in data-formatters.js
 
-// Initialize cache manager for character data
-const cacheManager = new CharacterCacheManager();
+// Get singleton cache manager for character data (shared across app)
+const cacheManager = getCharacterCacheManager();
 
 // Track active messages for auto-refresh functionality
 // Map structure: messageId -> { channelId, messageId, userId, type }
