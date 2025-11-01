@@ -47,8 +47,6 @@ data/
 # App
 index.html
 vite.config.js
-src/
-src-tauri/
 public/
 ~/
 latest.json
