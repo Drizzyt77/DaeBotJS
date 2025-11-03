@@ -473,7 +473,7 @@ function SettingsPanel({ settings: initialSettings }) {
 
                         <div className="form-group">
                             <label>Application</label>
-                            <div className="info-text">DaeBot - WoW Guild Manager</div>
+                            <div className="info-text">DaeBot - WoW Character Manager</div>
                             <small className="tooltip" style={{ display: 'block', marginTop: '0.5rem' }}>Automate Discord bot for World of Warcraft Mythic+ tracking</small>
                         </div>
                     </div>
@@ -523,12 +523,12 @@ function SettingsPanel({ settings: initialSettings }) {
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="tokenChannel">Token Channel ID (optional)</label>
+                        <label htmlFor="tokenChannel">WoW Token Channel ID (optional)</label>
                         <input
                             id="tokenChannel"
                             type="text"
                             className="input"
-                            placeholder="Channel for token updates"
+                            placeholder="Channel for WoW token updates"
                             value={config.tokenChannel}
                             onChange={(e) => setConfig({ ...config, tokenChannel: e.target.value })}
                         />
