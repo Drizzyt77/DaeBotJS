@@ -104,3 +104,7 @@ export async function deployDiscordCommands() {
 export async function deleteDiscordCommands() {
     return await invoke('delete_discord_commands');
 }
+
+export async function copyCommandsFolder() {
+    return await invoke('copy_commands_folder');
+}

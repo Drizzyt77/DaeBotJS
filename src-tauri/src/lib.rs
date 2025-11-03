@@ -8,7 +8,7 @@ use tauri::Manager;
 use tauri::{menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent}};
 use tauri_plugin_updater::UpdaterExt;
 use rusqlite::Connection;
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Character {
@@ -531,19 +531,6 @@ fn quit_app(app: tauri::AppHandle, state: tauri::State<AppState>) {
     app.exit(0);
 }
 
-#[derive(Deserialize)]
-struct DiscordCommand {
-    name: String,
-    description: String,
-    #[serde(default)]
-    options: Vec<serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-struct CommandFile {
-    data: DiscordCommand,
-}
-
 #[tauri::command]
 async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String> {
     println!("deploy_discord_commands command called");
@@ -754,23 +741,71 @@ fn load_config(app: &tauri::AppHandle) -> Result<serde_json::Value, String> {
         .map_err(|e| format!("Failed to parse config.json: {}", e))
 }
 
-// Helper function to recursively copy a directory
-fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
+#[tauri::command]
+fn copy_commands_folder(app: tauri::AppHandle) -> Result<String, String> {
+    println!("copy_commands_folder command called");
 
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let path = entry.path();
-        let dest_path = dst.join(entry.file_name());
+    // Get AppData directory
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let commands_dir = app_dir.join("commands");
 
-        if path.is_dir() {
-            copy_dir_recursive(&path, &dest_path)?;
-        } else {
-            fs::copy(&path, &dest_path)?;
+    // Get resource directory
+    let resource_path = app.path().resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    println!("Resource directory: {:?}", resource_path);
+
+    // Commands are bundled in _up_/dist/commands subdirectory
+    let source_commands_path = resource_path.join("_up_").join("dist").join("commands");
+    println!("Looking for command files at: {:?}", source_commands_path);
+
+    if !source_commands_path.exists() {
+        return Err(format!(
+            "Commands not found at expected location: {:?}\n\nPlease report this issue.",
+            source_commands_path
+        ));
+    }
+
+    // Create commands directory if it doesn't exist
+    if !commands_dir.exists() {
+        fs::create_dir_all(&commands_dir)
+            .map_err(|e| format!("Failed to create commands directory: {}", e))?;
+    }
+
+    // Find all .js files in the bundled commands directory
+    let entries = fs::read_dir(&source_commands_path)
+        .map_err(|e| format!("Failed to read commands directory: {}", e))?;
+
+    let mut copied_files = Vec::new();
+
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+
+        if let Some(name_str) = file_name.to_str() {
+            if name_str.ends_with(".js") {
+                let source_file = source_commands_path.join(&file_name);
+                let dest_file = commands_dir.join(&file_name);
+
+                println!("Copying {:?} to {:?}", source_file, dest_file);
+                fs::copy(&source_file, &dest_file)
+                    .map_err(|e| format!("Failed to copy {:?}: {}", file_name, e))?;
+
+                copied_files.push(name_str.to_string());
+            }
         }
     }
 
-    Ok(())
+    if copied_files.is_empty() {
+        return Err("No command files found to copy".to_string());
+    }
+
+    Ok(format!(
+        "Successfully copied {} command file(s) to:\n{:?}\n\nFiles:\n{}",
+        copied_files.len(),
+        commands_dir,
+        copied_files.join("\n")
+    ))
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -1544,26 +1579,60 @@ pub fn run() {
           }
         }
 
-        // Copy commands folder from bundled resources to AppData if it doesn't exist
+        // Copy command files from bundled resources to AppData if they don't exist
         let commands_dir = app_dir.join("commands");
         if !commands_dir.exists() {
-          println!("Commands folder not found in AppData, copying from resources...");
+          println!("Commands folder not found in AppData, copying command files from resources...");
 
           // Get the resource path where bundled files are stored
           if let Ok(resource_path) = app.path().resource_dir() {
-            let source_commands_dir = resource_path.join("commands");
+            println!("Resource directory: {:?}", resource_path);
 
-            if source_commands_dir.exists() {
-              match copy_dir_recursive(&source_commands_dir, &commands_dir) {
-                Ok(_) => println!("Successfully copied commands folder to AppData"),
-                Err(e) => println!("Warning: Failed to copy commands folder: {}", e),
+            // Commands are bundled in _up_/dist/commands subdirectory
+            let source_commands_path = resource_path.join("_up_").join("dist").join("commands");
+            println!("Looking for command files at: {:?}", source_commands_path);
+
+            if source_commands_path.exists() {
+              // Create commands directory
+              if let Err(e) = fs::create_dir_all(&commands_dir) {
+                println!("Warning: Failed to create commands directory: {}", e);
+              } else {
+                // Copy all .js files from bundled commands to AppData commands directory
+                let mut copied_count = 0;
+                if let Ok(entries) = fs::read_dir(&source_commands_path) {
+                  for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    if let Some(name_str) = file_name.to_str() {
+                      if name_str.ends_with(".js") {
+                        let source_file = source_commands_path.join(&file_name);
+                        let dest_file = commands_dir.join(&file_name);
+
+                        match fs::copy(&source_file, &dest_file) {
+                          Ok(_) => {
+                            println!("  Copied: {:?}", file_name);
+                            copied_count += 1;
+                          }
+                          Err(e) => println!("  Warning: Failed to copy {:?}: {}", file_name, e),
+                        }
+                      }
+                    }
+                  }
+                }
+
+                if copied_count > 0 {
+                  println!("Successfully copied {} command file(s) to AppData: {:?}", copied_count, commands_dir);
+                } else {
+                  println!("Warning: No .js command files found in bundled resources");
+                }
               }
             } else {
-              println!("Warning: Commands folder not found in bundled resources");
+              println!("Warning: Commands not found at: {:?}", source_commands_path);
             }
+          } else {
+            println!("Warning: Could not get resource directory");
           }
         } else {
-          println!("Commands folder already exists in AppData");
+          println!("Commands folder already exists in AppData: {:?}", commands_dir);
         }
       }
 
@@ -1692,7 +1761,8 @@ pub fn run() {
         get_sync_history,
         add_sync_history,
         deploy_discord_commands,
-        delete_discord_commands
+        delete_discord_commands,
+        copy_commands_folder
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

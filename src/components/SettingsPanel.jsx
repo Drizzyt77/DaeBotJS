@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands } from '../tauriApi';
+import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands, copyCommandsFolder } from '../tauriApi';
 import useUpdateManager from '../hooks/useUpdateManager';
 import { open, message, ask } from '@tauri-apps/plugin-dialog';
 
@@ -310,6 +310,20 @@ function SettingsPanel({ settings: initialSettings }) {
         }
     };
 
+    const handleCopyCommandsFolder = async () => {
+        try {
+            setSaving(true);
+            const result = await copyCommandsFolder();
+            await message(result, { title: 'DaeBot', kind: 'info' });
+        } catch (error) {
+            console.error('Failed to copy commands folder:', error);
+            const errorMsg = typeof error === 'string' ? error : (error?.message || String(error) || 'Unknown error');
+            await message('Failed to copy commands folder:\n\n' + errorMsg, { title: 'DaeBot', kind: 'error' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="settings-panel">
             {/* Tabs */}
@@ -580,7 +594,19 @@ function SettingsPanel({ settings: initialSettings }) {
                         >
                             {saving ? 'Deleting...' : 'Delete All Commands'}
                         </button>
+
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleCopyCommandsFolder}
+                            disabled={saving}
+                        >
+                            {saving ? 'Copying...' : 'Copy Commands Folder'}
+                        </button>
                     </div>
+
+                    <small style={{ display: 'block', marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                        If deploy fails, try "Copy Commands Folder" first to restore command files.
+                    </small>
 
                     <hr style={{ margin: '2rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
 
