@@ -52,7 +52,7 @@ function CharacterList({ compact = false }) {
     };
 
     const handleSyncCharacter = async (character) => {
-        await message(`Manual sync for individual characters is not yet implemented in the Tauri GUI.\n\nThe bot automatically syncs all characters every hour.\n\nCharacter: ${character.name}\n\nYou can see sync activity in the Logs tab.`, { title: 'DaeBot', kind: 'info' });
+        await message(`Manual sync for individual characters is not yet implemented in the DaeBot GUI.\n\nThe bot automatically syncs all characters every hour.\n\nCharacter: ${character.name}\n\nYou can see sync activity in the Logs tab.`, { title: 'DaeBot', kind: 'info' });
     };
 
     const getCharacterStatus = (characterName) => {

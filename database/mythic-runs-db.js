@@ -45,7 +45,7 @@ if (process.pkg) {
 /**
  * Database schema version for migrations
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * MythicRunsDatabase class
@@ -291,6 +291,35 @@ class MythicRunsDatabase {
             ).run(4, Date.now());
 
             logger.info('Migration 3 -> 4 completed: Added default_realm column');
+        }
+
+        // Migration 4 -> 5: Add sync_history table
+        if (fromVersion < 5) {
+            logger.info('Applying migration 4 -> 5: Adding sync_history table');
+
+            this.db.exec(`
+                -- Sync history table for tracking automatic and manual syncs
+                CREATE TABLE IF NOT EXISTS sync_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp INTEGER NOT NULL,
+                    sync_type TEXT NOT NULL DEFAULT 'auto',
+                    runs_added INTEGER NOT NULL DEFAULT 0,
+                    characters_processed INTEGER NOT NULL DEFAULT 0,
+                    duration_ms INTEGER,
+                    success BOOLEAN NOT NULL DEFAULT 1,
+                    error_message TEXT
+                );
+
+                -- Index for fast lookups
+                CREATE INDEX IF NOT EXISTS idx_sync_history_timestamp ON sync_history(timestamp DESC);
+            `);
+
+            // Record schema version
+            this.db.prepare(
+                'INSERT INTO schema_info (version, applied_at) VALUES (?, ?)'
+            ).run(5, Date.now());
+
+            logger.info('Migration 4 -> 5 completed: Added sync_history table');
         }
     }
 
@@ -613,6 +642,64 @@ class MythicRunsDatabase {
         };
 
         return stats;
+    }
+
+    /**
+     * Insert a sync history entry
+     * @param {Object} syncData - Sync information
+     * @returns {number} Insert ID
+     */
+    insertSyncHistory(syncData) {
+        const {
+            timestamp = Date.now(),
+            sync_type = 'auto',
+            runs_added = 0,
+            characters_processed = 0,
+            duration_ms = null,
+            success = true,
+            error_message = null
+        } = syncData;
+
+        const stmt = this.db.prepare(`
+            INSERT INTO sync_history (timestamp, sync_type, runs_added, characters_processed, duration_ms, success, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const result = stmt.run(timestamp, sync_type, runs_added, characters_processed, duration_ms, success ? 1 : 0, error_message);
+        return result.lastInsertRowid;
+    }
+
+    /**
+     * Get the last sync time
+     * @returns {number|null} Timestamp of last successful sync or null
+     */
+    getLastSyncTime() {
+        const result = this.db.prepare(`
+            SELECT timestamp FROM sync_history
+            WHERE success = 1
+            ORDER BY timestamp DESC
+            LIMIT 1
+        `).get();
+
+        return result?.timestamp || null;
+    }
+
+    /**
+     * Get sync history
+     * @param {number} limit - Number of entries to retrieve
+     * @returns {Array} Array of sync history entries
+     */
+    getSyncHistory(limit = 10) {
+        const results = this.db.prepare(`
+            SELECT * FROM sync_history
+            ORDER BY timestamp DESC
+            LIMIT ?
+        `).all(limit);
+
+        return results.map(entry => ({
+            ...entry,
+            success: Boolean(entry.success)
+        }));
     }
 
     /**

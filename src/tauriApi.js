@@ -96,6 +96,10 @@ export async function addSyncHistory(entry) {
     return await invoke('add_sync_history', { entry });
 }
 
+export async function getLastSyncTime() {
+    return await invoke('get_last_sync_time');
+}
+
 // Discord command deployment
 export async function deployDiscordCommands() {
     return await invoke('deploy_discord_commands');

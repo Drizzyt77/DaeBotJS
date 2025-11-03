@@ -24,6 +24,7 @@ const { SlashCommandBuilder, MessageFlags, AttachmentBuilder } = require('discor
 const logger = require('../utils/logger');
 const weeklyCsvLogger = require('../utils/weekly-csv-logger');
 const { getConfigService } = require('../services/config-service');
+const { getDatabase } = require('../database/mythic-runs-db');
 
 // Import notes system
 const notesManager = require('../utils/notes-manager');
@@ -2032,8 +2033,44 @@ module.exports = {
 
                 case COMPONENT_IDS.REFRESH_DATA:
                     // Clear M+ cache for refresh and show main menu
+                    const refreshStartTime = Date.now();
                     cacheManager.refreshMplusData();
-                    await showMainMenu(interaction, false, true);
+
+                    try {
+                        await showMainMenu(interaction, false, true);
+
+                        // Record successful refresh in database
+                        const refreshDuration = Date.now() - refreshStartTime;
+                        const db = getDatabase();
+                        db.insertSyncHistory({
+                            timestamp: Date.now(),
+                            sync_type: 'manual',
+                            runs_added: 0, // API refresh doesn't add runs to DB
+                            characters_processed: 0, // Unknown at this level
+                            duration_ms: refreshDuration,
+                            success: true,
+                            error_message: null
+                        });
+                        logger.info('Discord refresh completed and recorded in database', {
+                            duration_ms: refreshDuration
+                        });
+                    } catch (error) {
+                        // Record failed refresh in database
+                        const db = getDatabase();
+                        db.insertSyncHistory({
+                            timestamp: Date.now(),
+                            sync_type: 'manual',
+                            runs_added: 0,
+                            characters_processed: 0,
+                            duration_ms: Date.now() - refreshStartTime,
+                            success: false,
+                            error_message: error.message
+                        });
+                        logger.error('Discord refresh failed', {
+                            error: error.message
+                        });
+                        throw error; // Re-throw to maintain error handling flow
+                    }
                     break;
 
                 case COMPONENT_IDS.MAIN_MENU:

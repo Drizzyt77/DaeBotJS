@@ -9,6 +9,7 @@
 const { RunCollector } = require('./run-collector');
 const logger = require('../utils/logger');
 const { getCharacterCacheManager } = require('../utils/cache-manager');
+const { getDatabase } = require('../database/mythic-runs-db');
 
 // Sync interval in milliseconds (default: 1 hour)
 const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -91,6 +92,24 @@ async function runSync(collector) {
             duration_sec: (duration / 1000).toFixed(2)
         });
 
+        // Record sync in database
+        try {
+            const db = getDatabase();
+            db.insertSyncHistory({
+                timestamp: Date.now(),
+                sync_type: 'auto',
+                runs_added: summary.totalNewRuns || 0,
+                characters_processed: summary.charactersProcessed || 0,
+                duration_ms: duration,
+                success: true
+            });
+            logger.info('Sync history recorded in database');
+        } catch (dbError) {
+            logger.error('Failed to record sync history', {
+                error: dbError.message
+            });
+        }
+
         // Notify completion
         if (statusTracker) {
             statusTracker.completeSync({
@@ -134,6 +153,23 @@ async function runSync(collector) {
             stack: error.stack
         });
 
+        // Record failed sync in database
+        try {
+            const db = getDatabase();
+            db.insertSyncHistory({
+                timestamp: Date.now(),
+                sync_type: 'auto',
+                runs_added: 0,
+                characters_processed: 0,
+                success: false,
+                error_message: error.message
+            });
+        } catch (dbError) {
+            logger.error('Failed to record sync error', {
+                error: dbError.message
+            });
+        }
+
         // Notify error
         if (statusTracker) {
             statusTracker.errorSync(error.message);
@@ -147,7 +183,52 @@ async function runSync(collector) {
  */
 async function triggerManualSync() {
     const collector = new RunCollector();
-    return await collector.collectConfigCharacters();
+    const startTime = Date.now();
+
+    try {
+        const summary = await collector.collectConfigCharacters();
+        const duration = Date.now() - startTime;
+
+        // Record manual sync in database
+        try {
+            const db = getDatabase();
+            db.insertSyncHistory({
+                timestamp: Date.now(),
+                sync_type: 'manual',
+                runs_added: summary.totalNewRuns || 0,
+                characters_processed: summary.charactersProcessed || 0,
+                duration_ms: duration,
+                success: true
+            });
+            logger.info('Manual sync history recorded in database');
+        } catch (dbError) {
+            logger.error('Failed to record manual sync history', {
+                error: dbError.message
+            });
+        }
+
+        return summary;
+    } catch (error) {
+        // Record failed manual sync
+        try {
+            const db = getDatabase();
+            db.insertSyncHistory({
+                timestamp: Date.now(),
+                sync_type: 'manual',
+                runs_added: 0,
+                characters_processed: 0,
+                duration_ms: Date.now() - startTime,
+                success: false,
+                error_message: error.message
+            });
+        } catch (dbError) {
+            logger.error('Failed to record manual sync error', {
+                error: dbError.message
+            });
+        }
+
+        throw error;
+    }
 }
 
 module.exports = {

@@ -1326,6 +1326,177 @@ fn get_most_recent_log_file(logs_dir: &PathBuf) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
+fn get_last_sync_time(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    println!("get_last_sync_time called");
+
+    // Get app data directory
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let db_path = app_dir.join("data").join("mythic_runs.db");
+
+    println!("Database path: {:?}", db_path);
+
+    if !db_path.exists() {
+        println!("Database does not exist yet");
+        return Ok(None);
+    }
+
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode to read from the WAL file (same as Node.js bot)
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+    println!("WAL mode enabled for reading");
+
+    // Migrate sync_history table if it exists with old schema
+    let table_exists: Result<i64, rusqlite::Error> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sync_history'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(1) = table_exists {
+        // Check if sync_type column exists
+        let has_sync_type: Result<i64, rusqlite::Error> = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('sync_history') WHERE name='sync_type'",
+            [],
+            |row| row.get(0)
+        );
+
+        if let Ok(0) = has_sync_type {
+            println!("Migrating sync_history table to add missing columns...");
+            // Add missing columns from old schema to new schema
+            let _ = conn.execute("ALTER TABLE sync_history ADD COLUMN sync_type TEXT NOT NULL DEFAULT 'auto'", []);
+            let _ = conn.execute("ALTER TABLE sync_history ADD COLUMN duration_ms INTEGER", []);
+
+            // Rename columns if needed - SQLite doesn't support RENAME COLUMN in older versions
+            // So we'll check if we need to migrate data
+            let has_error_message: Result<i64, rusqlite::Error> = conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sync_history') WHERE name='error_message'",
+                [],
+                |row| row.get(0)
+            );
+
+            if let Ok(0) = has_error_message {
+                // Old schema detected - need to recreate table
+                println!("Old schema detected - recreating sync_history table with new schema...");
+                conn.execute("ALTER TABLE sync_history RENAME TO sync_history_old", [])
+                    .map_err(|e| format!("Failed to rename old table: {}", e))?;
+
+                conn.execute(
+                    "CREATE TABLE sync_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp INTEGER NOT NULL,
+                        sync_type TEXT NOT NULL DEFAULT 'auto',
+                        runs_added INTEGER NOT NULL DEFAULT 0,
+                        characters_processed INTEGER NOT NULL DEFAULT 0,
+                        duration_ms INTEGER,
+                        success INTEGER NOT NULL DEFAULT 1,
+                        error_message TEXT
+                    )",
+                    [],
+                ).map_err(|e| format!("Failed to create new table: {}", e))?;
+
+                // Copy data from old table to new table
+                conn.execute(
+                    "INSERT INTO sync_history (id, timestamp, success, runs_added, characters_processed, duration_ms, error_message)
+                     SELECT id, timestamp, success, COALESCE(runs_added, 0), COALESCE(characters_processed, 0), duration, error
+                     FROM sync_history_old",
+                    [],
+                ).map_err(|e| format!("Failed to migrate data: {}", e))?;
+
+                // Drop old table
+                conn.execute("DROP TABLE sync_history_old", [])
+                    .map_err(|e| format!("Failed to drop old table: {}", e))?;
+
+                println!("Migration completed successfully!");
+            }
+        }
+    }
+
+    // Check if sync_history table exists
+    let table_exists: Result<i64, rusqlite::Error> = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sync_history'",
+        [],
+        |row| row.get(0)
+    );
+
+    match table_exists {
+        Ok(count) if count == 0 => {
+            println!("sync_history table does not exist yet - waiting for migration");
+            return Ok(None);
+        }
+        Err(e) => {
+            println!("Error checking for table existence: {}", e);
+            return Err(format!("Failed to check table existence: {}", e));
+        }
+        _ => {}
+    }
+
+    // First, check what's actually in the table for debugging
+    let total_count: Result<i64, rusqlite::Error> = conn.query_row(
+        "SELECT COUNT(*) FROM sync_history",
+        [],
+        |row| row.get(0)
+    );
+    println!("Total sync_history entries: {:?}", total_count);
+
+    let success_count: Result<i64, rusqlite::Error> = conn.query_row(
+        "SELECT COUNT(*) FROM sync_history WHERE success = 1",
+        [],
+        |row| row.get(0)
+    );
+    println!("Successful sync entries: {:?}", success_count);
+
+    // Show all entries for debugging
+    let mut stmt = conn.prepare("SELECT id, timestamp, sync_type, success FROM sync_history ORDER BY timestamp DESC LIMIT 5")
+        .map_err(|e| format!("Failed to prepare debug query: {}", e))?;
+    let rows = stmt.query_map([], |row| {
+        Ok(format!("id={}, timestamp={}, sync_type={}, success={}",
+            row.get::<_, i64>(0).unwrap_or(-1),
+            row.get::<_, i64>(1).unwrap_or(-1),
+            row.get::<_, String>(2).unwrap_or_else(|_| "?".to_string()),
+            row.get::<_, i64>(3).unwrap_or(-1)
+        ))
+    });
+    println!("Recent sync_history entries:");
+    if let Ok(rows) = rows {
+        for row in rows {
+            if let Ok(row_str) = row {
+                println!("  {}", row_str);
+            }
+        }
+    }
+
+    // Query the last successful sync time from sync_history table
+    let result: Result<i64, rusqlite::Error> = conn.query_row(
+        "SELECT timestamp FROM sync_history WHERE success = 1 ORDER BY timestamp DESC LIMIT 1",
+        [],
+        |row| row.get(0)
+    );
+
+    match result {
+        Ok(timestamp) => {
+            println!("Found last sync timestamp: {}", timestamp);
+            // Convert millisecond timestamp to ISO 8601 string
+            let dt = DateTime::from_timestamp_millis(timestamp).unwrap_or_default();
+            let iso_time = dt.to_rfc3339();
+            println!("Converted to ISO 8601: {}", iso_time);
+            Ok(Some(iso_time))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            println!("No sync entries found with success=1");
+            Ok(None)
+        }
+        Err(e) => {
+            println!("Database query error: {}", e);
+            Err(format!("Database query failed: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
 fn get_stats(app: tauri::AppHandle) -> Result<Stats, String> {
     println!("get_stats called");
 
@@ -1353,6 +1524,10 @@ fn get_stats(app: tauri::AppHandle) -> Result<Stats, String> {
 
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode to read from the WAL file
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
 
     // Get total runs
     let total_runs: i64 = conn.query_row(
@@ -1410,16 +1585,21 @@ fn get_sync_history(app: tauri::AppHandle, limit: Option<usize>) -> Result<Vec<S
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 
-    // Create sync_history table if it doesn't exist
+    // Enable WAL mode to read from the WAL file
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+
+    // Create sync_history table if it doesn't exist (must match Node.js schema)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            success INTEGER NOT NULL,
-            runs_added INTEGER,
-            characters_processed INTEGER,
-            duration INTEGER,
-            error TEXT
+            timestamp INTEGER NOT NULL,
+            sync_type TEXT NOT NULL DEFAULT 'auto',
+            runs_added INTEGER NOT NULL DEFAULT 0,
+            characters_processed INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER,
+            success INTEGER NOT NULL DEFAULT 1,
+            error_message TEXT
         )",
         [],
     ).map_err(|e| format!("Failed to create sync_history table: {}", e))?;
@@ -1428,15 +1608,20 @@ fn get_sync_history(app: tauri::AppHandle, limit: Option<usize>) -> Result<Vec<S
 
     // Query sync history
     let mut stmt = conn.prepare(
-        "SELECT timestamp, success, runs_added, characters_processed, duration, error
+        "SELECT timestamp, success, runs_added, characters_processed, duration_ms, error_message
          FROM sync_history
          ORDER BY timestamp DESC
          LIMIT ?1"
     ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let history_iter = stmt.query_map([limit], |row| {
+        // Convert INTEGER timestamp (milliseconds) to ISO 8601 string
+        let timestamp_ms: i64 = row.get(0)?;
+        let dt = DateTime::from_timestamp_millis(timestamp_ms).unwrap_or_default();
+        let timestamp_str = dt.to_rfc3339();
+
         Ok(SyncHistoryEntry {
-            timestamp: row.get(0)?,
+            timestamp: timestamp_str,
             success: row.get::<_, i64>(1)? != 0,
             runs_added: row.get(2)?,
             characters_processed: row.get(3)?,
@@ -1469,30 +1654,44 @@ fn add_sync_history(app: tauri::AppHandle, entry: SyncHistoryEntry) -> Result<()
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 
-    // Create sync_history table if it doesn't exist
+    // Enable WAL mode to read from the WAL file
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+
+    // Create sync_history table if it doesn't exist (must match Node.js schema)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sync_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            success INTEGER NOT NULL,
-            runs_added INTEGER,
-            characters_processed INTEGER,
-            duration INTEGER,
-            error TEXT
+            timestamp INTEGER NOT NULL,
+            sync_type TEXT NOT NULL DEFAULT 'auto',
+            runs_added INTEGER NOT NULL DEFAULT 0,
+            characters_processed INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER,
+            success INTEGER NOT NULL DEFAULT 1,
+            error_message TEXT
         )",
         [],
     ).map_err(|e| format!("Failed to create sync_history table: {}", e))?;
 
-    // Insert the entry
+    // Convert ISO 8601 timestamp string to milliseconds integer
+    let timestamp_ms = DateTime::parse_from_rfc3339(&entry.timestamp)
+        .map(|dt| dt.timestamp_millis())
+        .unwrap_or_else(|_| {
+            // Fallback to current time if parsing fails
+            chrono::Utc::now().timestamp_millis()
+        });
+
+    // Insert the entry (sync_type defaults to 'auto' in schema)
     conn.execute(
-        "INSERT INTO sync_history (timestamp, success, runs_added, characters_processed, duration, error)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO sync_history (timestamp, sync_type, runs_added, characters_processed, duration_ms, success, error_message)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         (
-            &entry.timestamp,
-            if entry.success { 1 } else { 0 },
-            entry.runs_added,
-            entry.characters_processed,
+            timestamp_ms,
+            "auto",  // Default sync_type
+            entry.runs_added.unwrap_or(0),
+            entry.characters_processed.unwrap_or(0),
             entry.duration,
+            if entry.success { 1 } else { 0 },
             entry.error,
         ),
     ).map_err(|e| format!("Failed to insert sync history: {}", e))?;
@@ -1754,6 +1953,7 @@ pub fn run() {
         get_app_version,
         get_logs,
         get_startup_error,
+        get_last_sync_time,
         get_stats,
         get_blizzard_credentials,
         save_blizzard_credentials,
