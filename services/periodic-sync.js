@@ -98,8 +98,8 @@ async function runSync(collector) {
             db.insertSyncHistory({
                 timestamp: Date.now(),
                 sync_type: 'auto',
-                runs_added: summary.totalNewRuns || 0,
-                characters_processed: summary.charactersProcessed || 0,
+                runs_added: summary.total_runs_added || 0,
+                characters_processed: summary.total_characters || 0,
                 duration_ms: duration,
                 success: true
             });
@@ -113,8 +113,8 @@ async function runSync(collector) {
         // Notify completion
         if (statusTracker) {
             statusTracker.completeSync({
-                runsAdded: summary.totalNewRuns || 0,
-                characterCount: summary.charactersProcessed || 0,
+                runsAdded: summary.total_runs_added || 0,
+                characterCount: summary.total_characters || 0,
                 duration: duration
             });
         }
@@ -195,8 +195,8 @@ async function triggerManualSync() {
             db.insertSyncHistory({
                 timestamp: Date.now(),
                 sync_type: 'manual',
-                runs_added: summary.totalNewRuns || 0,
-                characters_processed: summary.charactersProcessed || 0,
+                runs_added: summary.total_runs_added || 0,
+                characters_processed: summary.total_characters || 0,
                 duration_ms: duration,
                 success: true
             });

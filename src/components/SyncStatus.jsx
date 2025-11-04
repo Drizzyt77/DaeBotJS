@@ -108,7 +108,7 @@ function SyncStatus() {
 
     const loadSyncHistory = async () => {
         try {
-            const historyData = await getSyncHistory(10);
+            const historyData = await getSyncHistory(4);
             setHistory(historyData);
         } catch (error) {
             console.error('Failed to load sync history:', error);
@@ -122,11 +122,21 @@ function SyncStatus() {
             console.log('Last sync timestamp received:', lastSyncTimestamp);
 
             if (lastSyncTimestamp) {
+                // Check if this is a NEW sync (timestamp changed)
+                const previousTimestamp = syncStatus.lastSync;
+                const timestampChanged = previousTimestamp !== lastSyncTimestamp;
+
                 setSyncStatus(prev => ({
                     ...prev,
                     lastSync: lastSyncTimestamp
                 }));
                 console.log('Sync status updated with timestamp:', lastSyncTimestamp);
+
+                // Reload sync history when a new sync is detected
+                if (timestampChanged && previousTimestamp !== null) {
+                    console.log('New sync detected - reloading sync history');
+                    loadSyncHistory();
+                }
             } else {
                 console.log('No sync timestamp found in database - waiting for first sync');
             }
@@ -349,6 +359,16 @@ function SyncStatus() {
                                     <div className="history-details">
                                         <div className="history-time">
                                             {new Date(entry.timestamp).toLocaleString()}
+                                            <span className="sync-type-badge" style={{
+                                                marginLeft: '8px',
+                                                padding: '2px 6px',
+                                                borderRadius: '3px',
+                                                fontSize: '0.75em',
+                                                backgroundColor: entry.syncType === 'manual' ? '#4CAF50' : '#2196F3',
+                                                color: 'white'
+                                            }}>
+                                                {entry.syncType === 'manual' ? 'Manual' : 'Auto'}
+                                            </span>
                                         </div>
                                         {entry.success ? (
                                             <div className="history-stats">

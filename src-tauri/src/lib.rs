@@ -1151,6 +1151,8 @@ struct Stats {
 struct SyncHistoryEntry {
     timestamp: String,
     success: bool,
+    #[serde(rename = "syncType")]
+    sync_type: String,
     #[serde(rename = "runsAdded", skip_serializing_if = "Option::is_none")]
     runs_added: Option<i64>,
     #[serde(rename = "charactersProcessed", skip_serializing_if = "Option::is_none")]
@@ -1604,11 +1606,11 @@ fn get_sync_history(app: tauri::AppHandle, limit: Option<usize>) -> Result<Vec<S
         [],
     ).map_err(|e| format!("Failed to create sync_history table: {}", e))?;
 
-    let limit = limit.unwrap_or(10);
+    let limit = limit.unwrap_or(4);
 
     // Query sync history
     let mut stmt = conn.prepare(
-        "SELECT timestamp, success, runs_added, characters_processed, duration_ms, error_message
+        "SELECT timestamp, success, sync_type, runs_added, characters_processed, duration_ms, error_message
          FROM sync_history
          ORDER BY timestamp DESC
          LIMIT ?1"
@@ -1623,10 +1625,11 @@ fn get_sync_history(app: tauri::AppHandle, limit: Option<usize>) -> Result<Vec<S
         Ok(SyncHistoryEntry {
             timestamp: timestamp_str,
             success: row.get::<_, i64>(1)? != 0,
-            runs_added: row.get(2)?,
-            characters_processed: row.get(3)?,
-            duration: row.get(4)?,
-            error: row.get(5)?,
+            sync_type: row.get(2)?,
+            runs_added: row.get(3)?,
+            characters_processed: row.get(4)?,
+            duration: row.get(5)?,
+            error: row.get(6)?,
         })
     }).map_err(|e| format!("Failed to query sync history: {}", e))?;
 
@@ -1681,13 +1684,13 @@ fn add_sync_history(app: tauri::AppHandle, entry: SyncHistoryEntry) -> Result<()
             chrono::Utc::now().timestamp_millis()
         });
 
-    // Insert the entry (sync_type defaults to 'auto' in schema)
+    // Insert the entry
     conn.execute(
         "INSERT INTO sync_history (timestamp, sync_type, runs_added, characters_processed, duration_ms, success, error_message)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         (
             timestamp_ms,
-            "auto",  // Default sync_type
+            &entry.sync_type,
             entry.runs_added.unwrap_or(0),
             entry.characters_processed.unwrap_or(0),
             entry.duration,
