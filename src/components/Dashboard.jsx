@@ -169,14 +169,13 @@ function Dashboard({ settings }) {
                                         <label htmlFor="seasonFilter" style={{ fontSize: '0.9rem', marginRight: '0.5rem' }}>Season:</label>
                                         <select
                                             id="seasonFilter"
+                                            className="input"
                                             value={selectedSeason || ''}
                                             onChange={(e) => setSelectedSeason(e.target.value || null)}
                                             style={{
                                                 padding: '0.25rem 0.5rem',
-                                                borderRadius: '4px',
-                                                border: '1px solid var(--border-color)',
-                                                backgroundColor: 'var(--bg-color)',
-                                                color: 'var(--text-color)'
+                                                fontSize: '0.9rem',
+                                                width: 'auto'
                                             }}
                                         >
                                             <option value="">All Seasons</option>
@@ -246,15 +245,13 @@ function Dashboard({ settings }) {
                                         <label htmlFor="statsSeasonFilter" style={{ fontSize: '0.9rem', marginRight: '0.5rem', fontWeight: 'bold' }}>Filter by Season:</label>
                                         <select
                                             id="statsSeasonFilter"
+                                            className="input"
                                             value={selectedSeason || ''}
                                             onChange={(e) => setSelectedSeason(e.target.value || null)}
                                             style={{
                                                 padding: '0.4rem 0.75rem',
-                                                borderRadius: '4px',
-                                                border: '1px solid var(--border-color)',
-                                                backgroundColor: 'var(--bg-color)',
-                                                color: 'var(--text-color)',
-                                                fontSize: '0.95rem'
+                                                fontSize: '0.95rem',
+                                                width: 'auto'
                                             }}
                                         >
                                             <option value="">All Seasons (Overall)</option>
