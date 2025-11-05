@@ -51,8 +51,12 @@ export async function getStartupError() {
 }
 
 // Stats API
-export async function getStats() {
-    return await invoke('get_stats');
+export async function getStats(season = null) {
+    return await invoke('get_stats', { season });
+}
+
+export async function getAvailableSeasons() {
+    return await invoke('get_available_seasons');
 }
 
 // App Control API

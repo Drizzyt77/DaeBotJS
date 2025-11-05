@@ -1180,6 +1180,40 @@ struct BotSettings {
 }
 
 #[tauri::command]
+fn get_available_seasons(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let db_path = app_dir.join("data").join("mythic_runs.db");
+
+    if !db_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+
+    // Query distinct seasons ordered by most recent
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT season FROM mythic_runs WHERE season IS NOT NULL ORDER BY season DESC"
+    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let seasons_iter = stmt.query_map([], |row| {
+        row.get(0)
+    }).map_err(|e| format!("Failed to query seasons: {}", e))?;
+
+    let mut seasons = Vec::new();
+    for season in seasons_iter {
+        seasons.push(season.map_err(|e| format!("Failed to read season: {}", e))?);
+    }
+
+    Ok(seasons)
+}
+
+#[tauri::command]
 fn get_bot_settings(app: tauri::AppHandle) -> Result<BotSettings, String> {
     let app_dir = app.path().app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
@@ -1604,19 +1638,13 @@ fn get_last_sync_time(app: tauri::AppHandle) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn get_stats(app: tauri::AppHandle) -> Result<Stats, String> {
-    println!("get_stats called");
+fn get_stats(app: tauri::AppHandle, season: Option<String>) -> Result<Stats, String> {
+    println!("get_stats called with season: {:?}", season);
 
     // Get project root directory
     let app_dir = app.path().app_data_dir()
             .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let db_path = app_dir.join("data").join("mythic_runs.db");
-    // let db_path = if cfg!(debug_assertions) {
-    //     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //         .parent()
-    //         .ok_or("Failed to find project root")?
-    //         .join("data")
-    //         .join("mythic_runs.db")
 
     println!("Looking for database: {:?}", db_path);
 
@@ -1636,16 +1664,29 @@ fn get_stats(app: tauri::AppHandle) -> Result<Stats, String> {
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
 
-    // Get total runs
+    // Build queries with optional season filter
+    let (runs_query, chars_query) = if let Some(ref s) = season {
+        (
+            format!("SELECT COUNT(*) FROM mythic_runs WHERE season = '{}'", s),
+            format!("SELECT COUNT(DISTINCT character_id) FROM mythic_runs WHERE season = '{}'", s)
+        )
+    } else {
+        (
+            "SELECT COUNT(*) FROM mythic_runs".to_string(),
+            "SELECT COUNT(DISTINCT character_id) FROM mythic_runs".to_string()
+        )
+    };
+
+    // Get total runs (filtered by season if specified)
     let total_runs: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM mythic_runs",
+        &runs_query,
         [],
         |row| row.get(0)
     ).unwrap_or(0);
 
-    // Get total characters
+    // Get total characters (filtered by season if specified)
     let total_characters: i64 = conn.query_row(
-        "SELECT COUNT(DISTINCT character_id) FROM mythic_runs",
+        &chars_query,
         [],
         |row| row.get(0)
     ).unwrap_or(0);
@@ -2063,6 +2104,7 @@ pub fn run() {
         get_startup_error,
         get_last_sync_time,
         get_stats,
+        get_available_seasons,
         get_blizzard_credentials,
         save_blizzard_credentials,
         import_database,

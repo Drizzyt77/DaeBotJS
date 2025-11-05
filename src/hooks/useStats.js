@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { getStats } from '../tauriApi';
 
 /**
- * Custom hook for managing database statistics
+ * Custom hook for managing database statistics with optional season filtering
  */
-function useStats() {
+function useStats(season = null) {
     const [stats, setStats] = useState({
         totalCharacters: 0,
         totalRuns: 0,
@@ -20,13 +20,13 @@ function useStats() {
         const interval = setInterval(loadStats, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [season]); // Re-load when season changes
 
     const loadStats = async () => {
-        console.log('[useStats] loadStats called');
+        console.log('[useStats] loadStats called with season:', season);
         try {
             setLoading(true);
-            const result = await getStats();
+            const result = await getStats(season);
             console.log('[useStats] Got stats:', result);
             setStats(result);
         } catch (error) {

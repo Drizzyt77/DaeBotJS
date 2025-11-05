@@ -7,17 +7,20 @@ import StatsChart from './StatsChart';
 import UpdateNotification from './UpdateNotification';
 import useBot from '../hooks/useBot';
 import useStats from '../hooks/useStats';
-import { quitApp, getAppVersion } from '../tauriApi';
+import { quitApp, getAppVersion, getAvailableSeasons } from '../tauriApi';
 import { message, ask } from '@tauri-apps/plugin-dialog';
 
 function Dashboard({ settings }) {
     const [activeTab, setActiveTab] = useState('overview');
     const [appVersion, setAppVersion] = useState('');
+    const [selectedSeason, setSelectedSeason] = useState(null);
+    const [availableSeasons, setAvailableSeasons] = useState([]);
     const { botStatus, startBot, stopBot, restartBot } = useBot();
-    const { stats, refreshStats } = useStats();
+    const { stats, refreshStats } = useStats(selectedSeason);
 
     useEffect(() => {
         loadVersion();
+        loadSeasons();
     }, []);
 
     const loadVersion = async () => {
@@ -26,6 +29,15 @@ function Dashboard({ settings }) {
             setAppVersion(version);
         } catch (error) {
             console.error('Failed to load version:', error);
+        }
+    };
+
+    const loadSeasons = async () => {
+        try {
+            const seasons = await getAvailableSeasons();
+            setAvailableSeasons(seasons);
+        } catch (error) {
+            console.error('Failed to load seasons:', error);
         }
     };
 
@@ -152,6 +164,28 @@ function Dashboard({ settings }) {
                         <div className="card">
                             <div className="card-header">
                                 <h2 className="card-title">📊 Quick Stats</h2>
+                                {availableSeasons.length > 0 && (
+                                    <div style={{ marginTop: '0.5rem' }}>
+                                        <label htmlFor="seasonFilter" style={{ fontSize: '0.9rem', marginRight: '0.5rem' }}>Season:</label>
+                                        <select
+                                            id="seasonFilter"
+                                            value={selectedSeason || ''}
+                                            onChange={(e) => setSelectedSeason(e.target.value || null)}
+                                            style={{
+                                                padding: '0.25rem 0.5rem',
+                                                borderRadius: '4px',
+                                                border: '1px solid var(--border-color)',
+                                                backgroundColor: 'var(--bg-color)',
+                                                color: 'var(--text-color)'
+                                            }}
+                                        >
+                                            <option value="">All Seasons</option>
+                                            {availableSeasons.map(season => (
+                                                <option key={season} value={season}>{season}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="stat-grid">
@@ -207,6 +241,29 @@ function Dashboard({ settings }) {
                             <div className="card-header">
                                 <h2 className="card-title">📈 Database Statistics</h2>
                                 <p className="card-subtitle">Visual insights into your M+ data</p>
+                                {availableSeasons.length > 0 && (
+                                    <div style={{ marginTop: '0.75rem' }}>
+                                        <label htmlFor="statsSeasonFilter" style={{ fontSize: '0.9rem', marginRight: '0.5rem', fontWeight: 'bold' }}>Filter by Season:</label>
+                                        <select
+                                            id="statsSeasonFilter"
+                                            value={selectedSeason || ''}
+                                            onChange={(e) => setSelectedSeason(e.target.value || null)}
+                                            style={{
+                                                padding: '0.4rem 0.75rem',
+                                                borderRadius: '4px',
+                                                border: '1px solid var(--border-color)',
+                                                backgroundColor: 'var(--bg-color)',
+                                                color: 'var(--text-color)',
+                                                fontSize: '0.95rem'
+                                            }}
+                                        >
+                                            <option value="">All Seasons (Overall)</option>
+                                            {availableSeasons.map(season => (
+                                                <option key={season} value={season}>{season}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                             <StatsChart />
                         </div>
