@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands, copyCommandsFolder } from '../tauriApi';
+import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands, copyCommandsFolder, getBotSettings, updateBotSettings } from '../tauriApi';
 import useUpdateManager from '../hooks/useUpdateManager';
 import { open, message, ask } from '@tauri-apps/plugin-dialog';
 
@@ -23,6 +23,14 @@ function SettingsPanel({ settings: initialSettings }) {
         clientId: '',
         clientSecret: ''
     });
+    const [botSettings, setBotSettings] = useState({
+        seasonId: 15,
+        seasonName: 'season-tww-3',
+        defaultRegion: 'us',
+        defaultRealm: 'thrall',
+        activeDungeons: []
+    });
+    const [newDungeon, setNewDungeon] = useState('');
     const [newCharacter, setNewCharacter] = useState({
         name: '',
         realm: '',
@@ -39,6 +47,7 @@ function SettingsPanel({ settings: initialSettings }) {
         loadSettings();
         loadConfig();
         loadBlizzardCreds();
+        loadBotSettings();
         loadVersion();
     }, [initialSettings]);
 
@@ -98,6 +107,78 @@ function SettingsPanel({ settings: initialSettings }) {
         } catch (error) {
             console.error('Failed to load Blizzard credentials:', error);
         }
+    };
+
+    const loadBotSettings = async () => {
+        try {
+            const result = await getBotSettings();
+            if (result) {
+                setBotSettings({
+                    seasonId: result.seasonId || 15,
+                    seasonName: result.seasonName || 'season-tww-3',
+                    defaultRegion: result.defaultRegion || 'us',
+                    defaultRealm: result.defaultRealm || 'thrall',
+                    activeDungeons: result.activeDungeons || []
+                });
+            }
+        } catch (error) {
+            console.error('Failed to load bot settings:', error);
+        }
+    };
+
+    const handleSaveBotSettings = async () => {
+        try {
+            setSaving(true);
+
+            // Validate season name format
+            if (!botSettings.seasonName.startsWith('season-')) {
+                await message('Season name must start with "season-" (e.g., season-mid-1)', {
+                    title: 'Invalid Season Name',
+                    kind: 'error'
+                });
+                return;
+            }
+
+            // Validate season ID
+            if (botSettings.seasonId < 1 || botSettings.seasonId > 100) {
+                await message('Season ID must be between 1 and 100', {
+                    title: 'Invalid Season ID',
+                    kind: 'error'
+                });
+                return;
+            }
+
+            await updateBotSettings(botSettings);
+            await message('Season settings saved successfully! The bot will use these settings for all future syncs.', {
+                title: 'Settings Saved',
+                kind: 'info'
+            });
+        } catch (error) {
+            console.error('Failed to save bot settings:', error);
+            await message('Failed to save season settings: ' + error, {
+                title: 'Error',
+                kind: 'error'
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAddDungeon = () => {
+        if (newDungeon.trim()) {
+            setBotSettings(prev => ({
+                ...prev,
+                activeDungeons: [...prev.activeDungeons, newDungeon.trim()]
+            }));
+            setNewDungeon('');
+        }
+    };
+
+    const handleRemoveDungeon = (index) => {
+        setBotSettings(prev => ({
+            ...prev,
+            activeDungeons: prev.activeDungeons.filter((_, i) => i !== index)
+        }));
     };
 
     const handleSaveBlizzardCreds = async () => {
@@ -345,6 +426,12 @@ function SettingsPanel({ settings: initialSettings }) {
                     onClick={() => setActiveTab('characters')}
                 >
                     Characters
+                </button>
+                <button
+                    className={`settings-tab ${activeTab === 'season' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('season')}
+                >
+                    Season Management
                 </button>
             </div>
 
@@ -752,6 +839,171 @@ function SettingsPanel({ settings: initialSettings }) {
                             <p>No characters configured yet. Add your first character above.</p>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Season Management */}
+            {activeTab === 'season' && (
+                <div className="settings-section">
+                    <h3>Season Management</h3>
+                    <p className="section-description">
+                        Configure the current Mythic+ season settings. These settings affect data collection and filtering throughout the application.
+                    </p>
+
+                    <div className="form-section">
+                        <h4>Current Season Information</h4>
+
+                        <div className="form-group">
+                            <label htmlFor="seasonId">Season ID (Blizzard API)</label>
+                            <input
+                                id="seasonId"
+                                type="number"
+                                className="input"
+                                placeholder="e.g., 15"
+                                value={botSettings.seasonId}
+                                onChange={(e) => setBotSettings({ ...botSettings, seasonId: parseInt(e.target.value) || 0 })}
+                                min="1"
+                                max="100"
+                            />
+                            <small className="tooltip">
+                                The numeric season ID used by Blizzard's API. For TWW Season 3, this is 15.
+                            </small>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="seasonName">Season Name (RaiderIO Format)</label>
+                            <input
+                                id="seasonName"
+                                type="text"
+                                className="input"
+                                placeholder="e.g., season-tww-3 or season-mid-1"
+                                value={botSettings.seasonName}
+                                onChange={(e) => setBotSettings({ ...botSettings, seasonName: e.target.value })}
+                            />
+                            <small className="tooltip">
+                                Format: season-[expansion]-[number]. Examples:
+                                <br />• TWW Season 3: season-tww-3
+                                <br />• Midnight Season 1: season-mid-1
+                                <br />This is used for RaiderIO API calls.
+                            </small>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="defaultRegion">Default Region</label>
+                            <select
+                                id="defaultRegion"
+                                className="input"
+                                value={botSettings.defaultRegion}
+                                onChange={(e) => setBotSettings({ ...botSettings, defaultRegion: e.target.value })}
+                            >
+                                <option value="us">US (Americas)</option>
+                                <option value="eu">EU (Europe)</option>
+                                <option value="kr">KR (Korea)</option>
+                                <option value="tw">TW (Taiwan)</option>
+                            </select>
+                            <small className="tooltip">Default region for API calls and character lookups.</small>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="defaultRealm">Default Realm</label>
+                            <input
+                                id="defaultRealm"
+                                type="text"
+                                className="input"
+                                placeholder="e.g., thrall"
+                                value={botSettings.defaultRealm}
+                                onChange={(e) => setBotSettings({ ...botSettings, defaultRealm: e.target.value.toLowerCase() })}
+                            />
+                            <small className="tooltip">Default realm name (lowercase, no spaces).</small>
+                        </div>
+                    </div>
+
+                    <div className="form-section">
+                        <h4>Active Dungeon Pool</h4>
+                        <p className="section-description">
+                            List the 8 dungeons active in the current Mythic+ season. This helps filter and validate data.
+                        </p>
+
+                        <div className="form-group">
+                            <label>Add Dungeon</label>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    placeholder="e.g., The Dawnbreaker"
+                                    value={newDungeon}
+                                    onChange={(e) => setNewDungeon(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddDungeon();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAddDungeon}
+                                    disabled={!newDungeon.trim()}
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+
+                        {botSettings.activeDungeons.length > 0 ? (
+                            <div className="dungeon-list" style={{ marginTop: '1rem' }}>
+                                <table className="character-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Dungeon Name</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {botSettings.activeDungeons.map((dungeon, index) => (
+                                            <tr key={index}>
+                                                <td>{index + 1}</td>
+                                                <td>{dungeon}</td>
+                                                <td>
+                                                    <button
+                                                        className="btn btn-danger btn-sm"
+                                                        onClick={() => handleRemoveDungeon(index)}
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="empty-state">
+                                <p>No dungeons configured. Add dungeons above (typically 8 for a season).</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="form-actions">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleSaveBotSettings}
+                            disabled={saving}
+                        >
+                            {saving ? 'Saving...' : 'Save Season Settings'}
+                        </button>
+                    </div>
+
+                    <div className="info-box" style={{ marginTop: '1.5rem' }}>
+                        <h4>📌 Important Notes</h4>
+                        <ul style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
+                            <li>Changes take effect immediately for new data collection</li>
+                            <li>Existing data in the database is not modified</li>
+                            <li>When a new season starts, update these settings before the first sync</li>
+                            <li>The bot must be running for syncs to occur</li>
+                        </ul>
+                    </div>
                 </div>
             )}
         </div>

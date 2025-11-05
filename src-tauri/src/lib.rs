@@ -1163,6 +1163,111 @@ struct SyncHistoryEntry {
     error: Option<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct BotSettings {
+    #[serde(rename = "seasonId")]
+    season_id: i64,
+    #[serde(rename = "seasonName")]
+    season_name: String,
+    #[serde(rename = "defaultRegion")]
+    default_region: String,
+    #[serde(rename = "defaultRealm")]
+    default_realm: String,
+    #[serde(rename = "activeDungeons")]
+    active_dungeons: Vec<String>,
+    #[serde(rename = "updatedAt")]
+    updated_at: i64,
+}
+
+#[tauri::command]
+fn get_bot_settings(app: tauri::AppHandle) -> Result<BotSettings, String> {
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let db_path = app_dir.join("data").join("mythic_runs.db");
+
+    if !db_path.exists() {
+        return Err("Database not found".to_string());
+    }
+
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+
+    // Query bot settings
+    let settings = conn.query_row(
+        "SELECT current_season_id, current_season_name, default_region, default_realm, active_dungeons, updated_at
+         FROM bot_settings WHERE id = 1",
+        [],
+        |row| {
+            let dungeons_json: String = row.get(4)?;
+            let dungeons: Vec<String> = serde_json::from_str(&dungeons_json).unwrap_or_default();
+
+            Ok(BotSettings {
+                season_id: row.get(0)?,
+                season_name: row.get(1)?,
+                default_region: row.get(2)?,
+                default_realm: row.get(3)?,
+                active_dungeons: dungeons,
+                updated_at: row.get(5)?,
+            })
+        }
+    ).map_err(|e| format!("Failed to query bot settings: {}", e))?;
+
+    Ok(settings)
+}
+
+#[tauri::command]
+fn update_bot_settings(app: tauri::AppHandle, settings: BotSettings) -> Result<(), String> {
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let db_path = app_dir.join("data").join("mythic_runs.db");
+
+    if !db_path.exists() {
+        return Err("Database not found".to_string());
+    }
+
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
+
+    // Validate season name format
+    if !settings.season_name.starts_with("season-") {
+        return Err("Season name must start with 'season-' (e.g., season-mid-1)".to_string());
+    }
+
+    // Serialize dungeons to JSON
+    let dungeons_json = serde_json::to_string(&settings.active_dungeons)
+        .map_err(|e| format!("Failed to serialize dungeons: {}", e))?;
+
+    // Update bot settings
+    conn.execute(
+        "UPDATE bot_settings
+         SET current_season_id = ?1,
+             current_season_name = ?2,
+             default_region = ?3,
+             default_realm = ?4,
+             active_dungeons = ?5,
+             updated_at = ?6
+         WHERE id = 1",
+        (
+            settings.season_id,
+            &settings.season_name,
+            &settings.default_region,
+            &settings.default_realm,
+            &dungeons_json,
+            chrono::Utc::now().timestamp_millis(),
+        ),
+    ).map_err(|e| format!("Failed to update bot settings: {}", e))?;
+
+    Ok(())
+}
+
 #[tauri::command]
 fn get_startup_error(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let app_dir = app.path().app_data_dir()
@@ -1963,6 +2068,8 @@ pub fn run() {
         import_database,
         get_sync_history,
         add_sync_history,
+        get_bot_settings,
+        update_bot_settings,
         deploy_discord_commands,
         delete_discord_commands,
         copy_commands_folder

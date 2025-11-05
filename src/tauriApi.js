@@ -100,6 +100,15 @@ export async function getLastSyncTime() {
     return await invoke('get_last_sync_time');
 }
 
+// Bot Settings (Season/Dungeons Management)
+export async function getBotSettings() {
+    return await invoke('get_bot_settings');
+}
+
+export async function updateBotSettings(settings) {
+    return await invoke('update_bot_settings', { settings });
+}
+
 // Discord command deployment
 export async function deployDiscordCommands() {
     return await invoke('deploy_discord_commands');
