@@ -1175,8 +1175,8 @@ struct BotSettings {
     default_realm: String,
     #[serde(rename = "activeDungeons")]
     active_dungeons: Vec<String>,
-    #[serde(rename = "updatedAt")]
-    updated_at: i64,
+    #[serde(rename = "updatedAt", skip_serializing_if = "Option::is_none")]
+    updated_at: Option<i64>,
 }
 
 #[tauri::command]
@@ -1211,7 +1211,7 @@ fn get_bot_settings(app: tauri::AppHandle) -> Result<BotSettings, String> {
                 default_region: row.get(2)?,
                 default_realm: row.get(3)?,
                 active_dungeons: dungeons,
-                updated_at: row.get(5)?,
+                updated_at: Some(row.get(5)?),
             })
         }
     ).map_err(|e| format!("Failed to query bot settings: {}", e))?;
