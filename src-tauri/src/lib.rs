@@ -814,6 +814,8 @@ struct UpdateInfo {
     #[serde(rename = "currentVersion")]
     current_version: String,
     available: bool,
+    #[serde(rename = "isPrerelease")]
+    is_prerelease: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     changelog: Option<String>,
 }
@@ -854,8 +856,27 @@ async fn fetch_changelog(version: &str) -> Option<String> {
 async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
     println!("Checking for updates...");
 
+    // Get bot settings to check beta channel preference
+    let settings = match get_bot_settings(app.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("Failed to get bot settings: {}, defaulting to stable channel", e);
+            // If we can't get settings, default to stable channel (beta_channel = false)
+            BotSettings {
+                season_id: 0,
+                season_name: String::new(),
+                default_region: String::new(),
+                default_realm: String::new(),
+                active_dungeons: Vec::new(),
+                beta_channel: false,
+                updated_at: None,
+            }
+        }
+    };
+
     let current_version = app.package_info().version.to_string();
     println!("Current version: {}", current_version);
+    println!("Beta channel enabled: {}", settings.beta_channel);
 
     // Try to check for updates using the updater API
     match app.updater_builder().build() {
@@ -863,15 +884,32 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> 
             match updater.check().await {
                 Ok(update_result) => {
                     if let Some(update) = update_result {
-                        println!("Update available: {}", update.version);
+                        let new_version = update.version.clone();
+                        let is_prerelease = new_version.contains("beta") || new_version.contains("alpha") || new_version.contains("rc");
+
+                        println!("Update available: {}", new_version);
+                        println!("Is pre-release: {}", is_prerelease);
+
+                        // If user is on stable channel, don't show pre-release updates
+                        if !settings.beta_channel && is_prerelease {
+                            println!("Skipping pre-release update (user is on stable channel)");
+                            return Ok(UpdateInfo {
+                                version: current_version.clone(),
+                                current_version,
+                                available: false,
+                                is_prerelease: false,
+                                changelog: None,
+                            });
+                        }
 
                         // Fetch changelog from GitHub
-                        let changelog = fetch_changelog(&update.version).await;
+                        let changelog = fetch_changelog(&new_version).await;
 
                         Ok(UpdateInfo {
-                            version: update.version.clone(),
+                            version: new_version,
                             current_version,
                             available: true,
+                            is_prerelease,
                             changelog,
                         })
                     } else {
@@ -880,6 +918,7 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> 
                             version: current_version.clone(),
                             current_version,
                             available: false,
+                            is_prerelease: false,
                             changelog: None,
                         })
                     }
@@ -891,6 +930,7 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> 
                         version: current_version.clone(),
                         current_version,
                         available: false,
+                        is_prerelease: false,
                         changelog: None,
                     })
                 }
@@ -902,6 +942,7 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> 
                 version: current_version.clone(),
                 current_version,
                 available: false,
+                is_prerelease: false,
                 changelog: None,
             })
         }
@@ -1175,6 +1216,8 @@ struct BotSettings {
     default_realm: String,
     #[serde(rename = "activeDungeons")]
     active_dungeons: Vec<String>,
+    #[serde(rename = "betaChannel")]
+    beta_channel: bool,
     #[serde(rename = "updatedAt", skip_serializing_if = "Option::is_none")]
     updated_at: Option<i64>,
 }
@@ -1232,12 +1275,13 @@ fn get_bot_settings(app: tauri::AppHandle) -> Result<BotSettings, String> {
 
     // Query bot settings
     let settings = conn.query_row(
-        "SELECT current_season_id, current_season_name, default_region, default_realm, active_dungeons, updated_at
+        "SELECT current_season_id, current_season_name, default_region, default_realm, active_dungeons, beta_channel, updated_at
          FROM bot_settings WHERE id = 1",
         [],
         |row| {
             let dungeons_json: String = row.get(4)?;
             let dungeons: Vec<String> = serde_json::from_str(&dungeons_json).unwrap_or_default();
+            let beta_channel_int: i64 = row.get(5)?;
 
             Ok(BotSettings {
                 season_id: row.get(0)?,
@@ -1245,7 +1289,8 @@ fn get_bot_settings(app: tauri::AppHandle) -> Result<BotSettings, String> {
                 default_region: row.get(2)?,
                 default_realm: row.get(3)?,
                 active_dungeons: dungeons,
-                updated_at: Some(row.get(5)?),
+                beta_channel: beta_channel_int != 0,
+                updated_at: Some(row.get(6)?),
             })
         }
     ).map_err(|e| format!("Failed to query bot settings: {}", e))?;
@@ -1287,7 +1332,8 @@ fn update_bot_settings(app: tauri::AppHandle, settings: BotSettings) -> Result<(
              default_region = ?3,
              default_realm = ?4,
              active_dungeons = ?5,
-             updated_at = ?6
+             beta_channel = ?6,
+             updated_at = ?7
          WHERE id = 1",
         (
             settings.season_id,
@@ -1295,6 +1341,7 @@ fn update_bot_settings(app: tauri::AppHandle, settings: BotSettings) -> Result<(
             &settings.default_region,
             &settings.default_realm,
             &dungeons_json,
+            settings.beta_channel as i64,
             chrono::Utc::now().timestamp_millis(),
         ),
     ).map_err(|e| format!("Failed to update bot settings: {}", e))?;

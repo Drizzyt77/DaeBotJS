@@ -45,7 +45,7 @@ if (process.pkg) {
 /**
  * Database schema version for migrations
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /**
  * MythicRunsDatabase class
@@ -320,6 +320,23 @@ class MythicRunsDatabase {
             ).run(5, Date.now());
 
             logger.info('Migration 4 -> 5 completed: Added sync_history table');
+        }
+
+        // Migration 5 -> 6: Add beta_channel column to bot_settings
+        if (fromVersion < 6) {
+            logger.info('Applying migration 5 -> 6: Adding beta_channel column');
+
+            this.db.exec(`
+                -- Add beta_channel column to bot_settings
+                ALTER TABLE bot_settings ADD COLUMN beta_channel INTEGER NOT NULL DEFAULT 0;
+            `);
+
+            // Record schema version
+            this.db.prepare(
+                'INSERT INTO schema_info (version, applied_at) VALUES (?, ?)'
+            ).run(6, Date.now());
+
+            logger.info('Migration 5 -> 6 completed: Added beta_channel column');
         }
     }
 

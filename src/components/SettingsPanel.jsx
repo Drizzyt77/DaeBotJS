@@ -28,7 +28,8 @@ function SettingsPanel({ settings: initialSettings }) {
         seasonName: 'season-tww-3',
         defaultRegion: 'us',
         defaultRealm: 'thrall',
-        activeDungeons: []
+        activeDungeons: [],
+        betaChannel: false
     });
     const [newDungeon, setNewDungeon] = useState('');
     const [newCharacter, setNewCharacter] = useState({
@@ -915,6 +916,22 @@ function SettingsPanel({ settings: initialSettings }) {
                                 onChange={(e) => setBotSettings({ ...botSettings, defaultRealm: e.target.value.toLowerCase() })}
                             />
                             <small className="tooltip">Default realm name (lowercase, no spaces).</small>
+                        </div>
+
+                        <div className="form-group">
+                            <label className="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={botSettings.betaChannel}
+                                    onChange={(e) => setBotSettings({ ...botSettings, betaChannel: e.target.checked })}
+                                />
+                                Enable Beta Channel
+                            </label>
+                            <small className="tooltip">
+                                When enabled, you'll receive beta/pre-release updates in addition to stable releases.
+                                Beta versions may contain new features but could be less stable.
+                                Useful for testing new features on a VM before deploying to production.
+                            </small>
                         </div>
                     </div>
 
