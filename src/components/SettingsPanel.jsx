@@ -119,7 +119,8 @@ function SettingsPanel({ settings: initialSettings }) {
                     seasonName: result.seasonName || 'season-tww-3',
                     defaultRegion: result.defaultRegion || 'us',
                     defaultRealm: result.defaultRealm || 'thrall',
-                    activeDungeons: result.activeDungeons || []
+                    activeDungeons: result.activeDungeons || [],
+                    betaChannel: result.betaChannel || false
                 });
             }
         } catch (error) {
@@ -198,11 +199,24 @@ function SettingsPanel({ settings: initialSettings }) {
         try {
             setSaving(true);
             await saveSettings(settings);
-            // Also save bot settings (for beta channel preference)
-            await updateBotSettings(botSettings);
-            await message('Settings saved successfully!', { title: 'DaeBot', kind: 'info' });
+
+            // Try to save bot settings (for beta channel preference)
+            // This will fail gracefully if the database doesn't exist yet (bot not started)
+            let botSettingsSaved = false;
+            try {
+                await updateBotSettings(botSettings);
+                botSettingsSaved = true;
+            } catch (botSettingsError) {
+                console.warn('Could not save bot settings (database may not exist yet):', botSettingsError);
+            }
+
+            if (botSettingsSaved) {
+                await message('Settings saved successfully!', { title: 'DaeBot', kind: 'info' });
+            } else {
+                await message('Settings saved! Note: Beta channel preference will be saved after the bot starts for the first time.', { title: 'DaeBot', kind: 'info' });
+            }
         } catch (error) {
-            await message('Failed to save settings: ' + error.message, { title: 'DaeBot', kind: 'error' });
+            await message('Failed to save settings: ' + (error?.message || error || 'Unknown error'), { title: 'DaeBot', kind: 'error' });
         } finally {
             setSaving(false);
         }
@@ -550,7 +564,7 @@ function SettingsPanel({ settings: initialSettings }) {
                                     checked={botSettings.betaChannel}
                                     onChange={(e) => setBotSettings({ ...botSettings, betaChannel: e.target.checked })}
                                 />
-                                Enable Beta Channel
+                                Enable Beta Release
                             </label>
                             <small className="tooltip" style={{ display: 'block', marginTop: '0.5rem' }}>
                                 Receive beta/pre-release updates for testing new features before stable releases.
