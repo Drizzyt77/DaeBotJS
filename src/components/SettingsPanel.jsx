@@ -198,6 +198,8 @@ function SettingsPanel({ settings: initialSettings }) {
         try {
             setSaving(true);
             await saveSettings(settings);
+            // Also save bot settings (for beta channel preference)
+            await updateBotSettings(botSettings);
             await message('Settings saved successfully!', { title: 'DaeBot', kind: 'info' });
         } catch (error) {
             await message('Failed to save settings: ' + error.message, { title: 'DaeBot', kind: 'error' });
@@ -539,6 +541,20 @@ function SettingsPanel({ settings: initialSettings }) {
                         <div className="form-group">
                             <label>Version</label>
                             <div className="info-text">v{appVersion || 'Loading...'}</div>
+                        </div>
+
+                        <div className="form-group">
+                            <label className="checkbox-label">
+                                <input className="checkbox-input"
+                                    type="checkbox"
+                                    checked={botSettings.betaChannel}
+                                    onChange={(e) => setBotSettings({ ...botSettings, betaChannel: e.target.checked })}
+                                />
+                                Enable Beta Channel
+                            </label>
+                            <small className="tooltip" style={{ display: 'block', marginTop: '0.5rem' }}>
+                                Receive beta/pre-release updates for testing new features before stable releases.
+                            </small>
                         </div>
 
                         <div className="form-group">
@@ -916,22 +932,6 @@ function SettingsPanel({ settings: initialSettings }) {
                                 onChange={(e) => setBotSettings({ ...botSettings, defaultRealm: e.target.value.toLowerCase() })}
                             />
                             <small className="tooltip">Default realm name (lowercase, no spaces).</small>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="checkbox-label">
-                                <input
-                                    type="checkbox"
-                                    checked={botSettings.betaChannel}
-                                    onChange={(e) => setBotSettings({ ...botSettings, betaChannel: e.target.checked })}
-                                />
-                                Enable Beta Channel
-                            </label>
-                            <small className="tooltip">
-                                When enabled, you'll receive beta/pre-release updates in addition to stable releases.
-                                Beta versions may contain new features but could be less stable.
-                                Useful for testing new features on a VM before deploying to production.
-                            </small>
                         </div>
                     </div>
 
