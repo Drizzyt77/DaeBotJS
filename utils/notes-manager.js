@@ -7,20 +7,15 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('./logger');
+const { getDataPath } = require('./app-paths');
 
 /**
  * Notes Manager class for handling note storage and operations
  */
 class NotesManager {
     constructor() {
-        // Create data directory if it doesn't exist
-        // When running in pkg, use AppData directory instead of snapshot
-        if (process.pkg) {
-            const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
-            this.dataDir = path.join(appDataDir, 'com.daebot.app', 'data');
-        } else {
-            this.dataDir = path.join(__dirname, '../data');
-        }
+        // Use centralized app-paths utility to determine correct data directory
+        this.dataDir = getDataPath();
         this.notesFilePath = path.join(this.dataDir, 'notes.json');
 
         if (!fs.existsSync(this.dataDir)) {
