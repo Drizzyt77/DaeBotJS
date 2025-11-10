@@ -539,15 +539,33 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
     let resource_dir = app.path().resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let backend_dir = resource_dir.join("dist-backend");
-    let deploy_script = backend_dir.join("deploy-commands.js");
+    println!("Resource directory: {:?}", resource_dir);
 
-    println!("Backend directory: {:?}", backend_dir);
-    println!("Deploy script path: {:?}", deploy_script);
+    // Check multiple possible locations for dist-backend
+    // 1. Direct path (dev builds)
+    // 2. _up_ subdirectory (production builds with updates)
+    let possible_paths = vec![
+        resource_dir.join("dist-backend"),
+        resource_dir.join("_up_").join("dist-backend"),
+    ];
 
-    if !deploy_script.exists() {
-        return Err(format!("deploy-commands.js not found at {:?}", deploy_script));
+    let mut backend_dir = None;
+    for path in &possible_paths {
+        println!("Checking path: {:?}", path);
+        if path.join("deploy-commands.js").exists() {
+            backend_dir = Some(path.clone());
+            println!("Found deploy-commands.js at: {:?}", path);
+            break;
+        }
     }
+
+    let backend_dir = backend_dir.ok_or_else(|| {
+        format!(
+            "deploy-commands.js not found. Checked:\n  - {:?}\n  - {:?}",
+            possible_paths[0].join("deploy-commands.js"),
+            possible_paths[1].join("deploy-commands.js")
+        )
+    })?;
 
     // Spawn Node.js process to run deploy-commands.js
     // Set working directory to backend_dir so relative paths work
@@ -674,16 +692,31 @@ fn copy_commands_folder(app: tauri::AppHandle) -> Result<String, String> {
 
     println!("Resource directory: {:?}", resource_path);
 
-    // Commands are bundled in _up_/dist/commands subdirectory
-    let source_commands_path = resource_path.join("_up_").join("dist").join("commands");
-    println!("Looking for command files at: {:?}", source_commands_path);
+    // Check multiple possible locations for commands
+    // 1. Direct path (dev builds): dist-backend/commands
+    // 2. _up_ subdirectory (production builds): _up_/dist-backend/commands
+    let possible_paths = vec![
+        resource_path.join("dist-backend").join("commands"),
+        resource_path.join("_up_").join("dist-backend").join("commands"),
+    ];
 
-    if !source_commands_path.exists() {
-        return Err(format!(
-            "Commands not found at expected location: {:?}\n\nPlease report this issue.",
-            source_commands_path
-        ));
+    let mut source_commands_path = None;
+    for path in &possible_paths {
+        println!("Checking for commands at: {:?}", path);
+        if path.exists() {
+            source_commands_path = Some(path.clone());
+            println!("Found commands directory at: {:?}", path);
+            break;
+        }
     }
+
+    let source_commands_path = source_commands_path.ok_or_else(|| {
+        format!(
+            "Commands not found. Checked:\n  - {:?}\n  - {:?}",
+            possible_paths[0],
+            possible_paths[1]
+        )
+    })?;
 
     // Create commands directory if it doesn't exist
     if !commands_dir.exists() {
