@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { getLogsPath } = require('./app-paths');
 
 /**
  * Log levels with numeric values for filtering
@@ -43,16 +44,9 @@ const COLORS = {
 class Logger {
     constructor() {
         try {
-            // Create logs directory if it doesn't exist
-            // When running in pkg, use AppData directory instead of snapshot
-            if (process.pkg) {
-                // Running inside pkg - use AppData
-                const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
-                this.logsDir = path.join(appDataDir, 'com.daebot.app', 'logs');
-            } else {
-                // Running normally - use project directory
-                this.logsDir = path.join(__dirname, '../logs');
-            }
+            // Use centralized app-paths utility to determine correct logs directory
+            // This handles both Tauri app (AppData) and standalone (project directory)
+            this.logsDir = getLogsPath();
 
             console.log('Logger initializing, logs directory:', this.logsDir);
 
