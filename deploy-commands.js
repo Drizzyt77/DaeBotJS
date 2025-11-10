@@ -24,28 +24,41 @@ const { getConfigPath } = require('./utils/app-paths');
 
 /**
  * Load and validate configuration required for command registration
+ * First checks environment variables (set by Tauri), then falls back to config.json
  */
 let clientId, guildId, token;
 
-try {
-    const configPath = getConfigPath();
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    const config = JSON.parse(configContent);
-    ({ clientId, guildId, token } = config);
+// Check if running from Tauri (environment variables set)
+if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_GUILD_ID && process.env.DISCORD_TOKEN) {
+    clientId = process.env.DISCORD_CLIENT_ID;
+    guildId = process.env.DISCORD_GUILD_ID;
+    token = process.env.DISCORD_TOKEN;
 
-    // Validate required configuration values
-    if (!clientId || !guildId || !token) {
-        throw new Error('Missing required configuration: clientId, guildId, or token');
-    }
-
-    console.log('✓ Configuration loaded successfully');
+    console.log('✓ Configuration loaded from environment variables');
     console.log(`Client ID: ${clientId}`);
     console.log(`Guild ID: ${guildId}`);
+} else {
+    // Fall back to config.json (for standalone/dev usage)
+    try {
+        const configPath = getConfigPath();
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = JSON.parse(configContent);
+        ({ clientId, guildId, token } = config);
 
-} catch (error) {
-    console.error('❌ Failed to load configuration:', error.message);
-    console.error('Please ensure config.json exists and contains clientId, guildId, and token');
-    process.exit(1);
+        // Validate required configuration values
+        if (!clientId || !guildId || !token) {
+            throw new Error('Missing required configuration: clientId, guildId, or token');
+        }
+
+        console.log('✓ Configuration loaded from config.json');
+        console.log(`Client ID: ${clientId}`);
+        console.log(`Guild ID: ${guildId}`);
+
+    } catch (error) {
+        console.error('❌ Failed to load configuration:', error.message);
+        console.error('Please ensure config.json exists and contains clientId, guildId, and token');
+        process.exit(1);
+    }
 }
 
 /**

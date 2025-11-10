@@ -567,11 +567,26 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
         )
     })?;
 
+    // Load config to pass to deploy script
+    let config = load_config(&app)?;
+    let client_id = config.get("clientId")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing clientId in config")?;
+    let guild_id = config.get("guildId")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing guildId in config")?;
+    let token = config.get("token")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing token in config")?;
+
     // Spawn Node.js process to run deploy-commands.js
-    // Set working directory to backend_dir so relative paths work
+    // Pass config via environment variables since config.json may not be accessible
     let output = Command::new("node")
         .arg("deploy-commands.js")
         .current_dir(&backend_dir)
+        .env("DISCORD_CLIENT_ID", client_id)
+        .env("DISCORD_GUILD_ID", guild_id)
+        .env("DISCORD_TOKEN", token)
         .output()
         .map_err(|e| format!("Failed to execute deploy script: {}", e))?;
 
