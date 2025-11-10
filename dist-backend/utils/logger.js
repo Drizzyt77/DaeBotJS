@@ -1,0 +1,478 @@
+/**
+ * Custom Logging Utility for DaeBot
+ *
+ * Provides structured logging with different levels and automatic file rotation.
+ * Logs are written to both console and rotating log files for persistence.
+ *
+ * Features:
+ * - Multiple log levels (ERROR, WARN, INFO, DEBUG)
+ * - Automatic file rotation based on date
+ * - Structured JSON logging for easier parsing
+ * - Console output with color coding
+ * - Performance tracking for API calls
+ * - Command usage tracking
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Log levels with numeric values for filtering
+ */
+const LOG_LEVELS = {
+    ERROR: 0,
+    WARN: 1,
+    INFO: 2,
+    DEBUG: 3
+};
+
+/**
+ * ANSI color codes for console output
+ */
+const COLORS = {
+    ERROR: '\x1b[31m',   // Red
+    WARN: '\x1b[33m',    // Yellow
+    INFO: '\x1b[36m',    // Cyan
+    DEBUG: '\x1b[37m',   // White
+    RESET: '\x1b[0m'     // Reset
+};
+
+/**
+ * Logger class for handling all logging operations
+ */
+class Logger {
+    constructor() {
+        try {
+            // Create logs directory if it doesn't exist
+            // When running in pkg, use AppData directory instead of snapshot
+            if (process.pkg) {
+                // Running inside pkg - use AppData
+                const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
+                this.logsDir = path.join(appDataDir, 'com.daebot.app', 'logs');
+            } else {
+                // Running normally - use project directory
+                this.logsDir = path.join(__dirname, '../logs');
+            }
+
+            console.log('Logger initializing, logs directory:', this.logsDir);
+
+            if (!fs.existsSync(this.logsDir)) {
+                fs.mkdirSync(this.logsDir, { recursive: true });
+                console.log('Created logs directory');
+            }
+
+            // Clean up old log files (older than 1 week)
+            this.cleanupOldLogs();
+
+            // Set default log level from environment or INFO
+            this.logLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toUpperCase()] ?? LOG_LEVELS.INFO;
+
+            // Track current log file date for rotation
+            this.currentLogDate = this.getCurrentDateString();
+            this.runStartTime = new Date();
+            this.logFilePath = this.getLogFilePath();
+            this.lineCount = 0;
+            this.maxLinesPerFile = 10000; // Rotate after 10k lines to prevent huge files
+            this.fileLoggingEnabled = false; // Track if file logging is working
+
+            console.log('Log file path:', this.logFilePath);
+
+            // Write current log file path to a marker file so Rust backend can find it
+            this.updateCurrentLogMarker();
+
+            // Create write stream for async file writing (prevents blocking)
+            this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+            this.logStream.on('error', (err) => {
+                console.error('Log stream error:', err);
+                this.fileLoggingEnabled = false;
+            });
+            this.logStream.on('open', () => {
+                this.fileLoggingEnabled = true;
+                console.log('Log stream opened successfully');
+            });
+
+            // Initialize log file with startup message
+            this.info('Logger initialized', {
+                logLevel: Object.keys(LOG_LEVELS)[this.logLevel],
+                logFile: this.logFilePath,
+                pid: process.pid
+            });
+
+        } catch (error) {
+            // If logger fails to initialize, ensure errors go to console
+            console.error('CRITICAL: Logger initialization failed:', error);
+            console.error('Stack:', error.stack);
+            this.fileLoggingEnabled = false;
+            // Don't throw - allow app to continue with console-only logging
+        }
+    }
+
+    /**
+     * Gets current date string for log file naming
+     * @returns {string} Date string in YYYY-MM-DD format
+     */
+    getCurrentDateString() {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    /**
+     * Gets the log file path for the current run
+     * @returns {string} Full path to current log file
+     */
+    getLogFilePath() {
+        // Format: daebot-YYYY-MM-DD-HHMMSS-PID.log
+        const now = this.runStartTime || new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        const timestamp = `${year}-${month}-${day}-${hours}${minutes}${seconds}`;
+        return path.join(this.logsDir, `daebot-${timestamp}-${process.pid}.log`);
+    }
+
+    /**
+     * Updates the current log marker file
+     * This file tells the Rust backend which log file is currently active
+     */
+    updateCurrentLogMarker() {
+        try {
+            const markerPath = path.join(this.logsDir, 'current.log');
+            fs.writeFileSync(markerPath, this.logFilePath);
+        } catch (error) {
+            console.error('Failed to update log marker:', error);
+        }
+    }
+
+    /**
+     * Cleans up old log files (older than 1 week)
+     * Called during logger initialization to prevent log accumulation
+     */
+    cleanupOldLogs() {
+        try {
+            const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
+            const files = fs.readdirSync(this.logsDir);
+
+            let deletedCount = 0;
+            let deletedSize = 0;
+
+            for (const file of files) {
+                // Only process log files (not current.log marker)
+                if (file.startsWith('daebot-') && file.endsWith('.log')) {
+                    const filePath = path.join(this.logsDir, file);
+
+                    try {
+                        const stats = fs.statSync(filePath);
+
+                        // Delete if file is older than 1 week
+                        if (stats.mtimeMs < oneWeekAgo) {
+                            fs.unlinkSync(filePath);
+                            deletedCount++;
+                            deletedSize += stats.size;
+                            console.log(`Deleted old log file: ${file} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        }
+                    } catch (error) {
+                        console.error(`Failed to process log file ${file}:`, error.message);
+                    }
+                }
+            }
+
+            if (deletedCount > 0) {
+                console.log(`Cleanup completed: Deleted ${deletedCount} old log file(s), freed ${(deletedSize / 1024 / 1024).toFixed(2)} MB`);
+            }
+        } catch (error) {
+            console.error('Failed to cleanup old logs:', error);
+            // Don't throw - log cleanup failure shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Rotates log file if date has changed or line limit reached
+     */
+    rotateLogIfNeeded() {
+        const currentDate = this.getCurrentDateString();
+        const needsDateRotation = currentDate !== this.currentLogDate;
+        const needsLineRotation = this.lineCount >= this.maxLinesPerFile;
+
+        if (needsDateRotation || needsLineRotation) {
+            const oldPath = this.logFilePath;
+
+            // Update tracking variables
+            if (needsDateRotation) {
+                this.currentLogDate = currentDate;
+            }
+            this.runStartTime = new Date(); // New run timestamp for rotated file
+            this.lineCount = 0;
+
+            this.logFilePath = this.getLogFilePath();
+
+            // Close old stream and create new one for new file
+            if (this.logStream) {
+                this.logStream.end();
+            }
+            this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+            this.logStream.on('error', (err) => {
+                console.error('Log stream error:', err);
+            });
+
+            // Update marker file
+            this.updateCurrentLogMarker();
+
+            const reason = needsDateRotation ? 'date change' : 'line limit reached';
+            this.info('Log file rotated', {
+                reason,
+                oldFile: path.basename(oldPath),
+                newFile: path.basename(this.logFilePath)
+            });
+        }
+    }
+
+    /**
+     * Formats log message with timestamp and metadata
+     * @param {string} level - Log level
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata
+     * @returns {Object} Formatted log entry
+     */
+    formatLogEntry(level, message, metadata = {}) {
+        return {
+            timestamp: new Date().toISOString(),
+            level,
+            message,
+            ...metadata
+        };
+    }
+
+    /**
+     * Writes log entry to file and console
+     * @param {string} level - Log level
+     * @param {string} message - Log message
+     * @param {Object} metadata - Additional metadata
+     */
+    writeLog(level, message, metadata = {}) {
+        // Check if this log level should be output
+        if (LOG_LEVELS[level] > this.logLevel) {
+            return;
+        }
+
+        // Rotate log file if needed
+        this.rotateLogIfNeeded();
+
+        // Format the log entry
+        const logEntry = this.formatLogEntry(level, message, metadata);
+
+        // Write to file asynchronously using stream (non-blocking)
+        try {
+            const logLine = JSON.stringify(logEntry) + '\n';
+            if (this.logStream && this.logStream.writable && this.fileLoggingEnabled) {
+                this.logStream.write(logLine);
+                this.lineCount++;
+            } else if (!this.fileLoggingEnabled) {
+                // File logging disabled, all output goes to console only
+                // This is already handled by console.log below
+            }
+        } catch (error) {
+            console.error('Failed to write to log file:', error);
+            this.fileLoggingEnabled = false;
+        }
+
+        // Write to console with color coding
+        const color = COLORS[level] || COLORS.INFO;
+        const timestamp = new Date().toISOString().substring(11, 19); // HH:MM:SS format
+        const metadataStr = Object.keys(metadata).length > 0 ? ` | ${JSON.stringify(metadata)}` : '';
+
+        console.log(`${color}[${timestamp}] ${level}: ${message}${metadataStr}${COLORS.RESET}`);
+
+        // Forward to Electron GUI if available
+        if (global.mainWindow && !global.mainWindow.isDestroyed()) {
+            try {
+                global.mainWindow.webContents.send('log-entry', {
+                    timestamp: logEntry.timestamp,
+                    level: level.toLowerCase(),
+                    message: message
+                });
+            } catch (error) {
+                // Silently fail if GUI is not available
+            }
+        }
+    }
+
+    /**
+     * Log error messages
+     * @param {string} message - Error message
+     * @param {Object} metadata - Additional error context
+     */
+    error(message, metadata = {}) {
+        this.writeLog('ERROR', message, metadata);
+    }
+
+    /**
+     * Log warning messages
+     * @param {string} message - Warning message
+     * @param {Object} metadata - Additional warning context
+     */
+    warn(message, metadata = {}) {
+        this.writeLog('WARN', message, metadata);
+    }
+
+    /**
+     * Log informational messages
+     * @param {string} message - Info message
+     * @param {Object} metadata - Additional info context
+     */
+    info(message, metadata = {}) {
+        this.writeLog('INFO', message, metadata);
+    }
+
+    /**
+     * Log debug messages
+     * @param {string} message - Debug message
+     * @param {Object} metadata - Additional debug context
+     */
+    debug(message, metadata = {}) {
+        this.writeLog('DEBUG', message, metadata);
+    }
+
+    /**
+     * Log success messages
+     * @param {string} message - Success message
+     * @param {Object} metadata - Additional success context
+     */
+    success(message, metadata = {}) {
+        this.writeLog('INFO', message, metadata); // Use INFO level but mark as success
+    }
+
+    /**
+     * Log Discord command usage
+     * @param {string} commandName - Name of the command
+     * @param {Object} user - Discord user object
+     * @param {string} guildId - Discord guild ID
+     * @param {Object} options - Command options/parameters
+     * @param {boolean} success - Whether command succeeded
+     * @param {number} duration - Command execution duration in ms
+     */
+    logCommand(commandName, user, guildId, options = {}, success = true, duration = null) {
+        const metadata = {
+            command: commandName,
+            userId: user.id,
+            username: user.tag,
+            guildId,
+            options,
+            success,
+            duration
+        };
+
+        if (success) {
+            this.info(`Command executed: /${commandName}`, metadata);
+        } else {
+            this.warn(`Command failed: /${commandName}`, metadata);
+        }
+    }
+
+    /**
+     * Log API call performance and results
+     * @param {string} apiName - Name of the API (e.g., 'RaiderIO')
+     * @param {string} endpoint - API endpoint called
+     * @param {number} duration - Request duration in ms
+     * @param {boolean} success - Whether request succeeded
+     * @param {number} statusCode - HTTP status code
+     * @param {Object} metadata - Additional API call context
+     */
+    logApiCall(apiName, endpoint, duration, success, statusCode, metadata = {}) {
+        const logData = {
+            api: apiName,
+            endpoint,
+            duration,
+            success,
+            statusCode,
+            ...metadata
+        };
+
+        if (success) {
+            this.info(`API call successful: ${apiName}`, logData);
+        } else {
+            this.warn(`API call failed: ${apiName}`, logData);
+        }
+    }
+
+    /**
+     * Log cache operations for debugging cache performance
+     * @param {string} operation - Cache operation (HIT, MISS, SET, DELETE)
+     * @param {string} key - Cache key
+     * @param {Object} metadata - Additional cache context
+     */
+    logCache(operation, key, metadata = {}) {
+        this.debug(`Cache ${operation}: ${key}`, metadata);
+    }
+
+    /**
+     * Log configuration changes
+     * @param {string} action - Action performed (ADD, REMOVE, MODIFY)
+     * @param {string} target - What was changed
+     * @param {Object} user - Discord user who made the change
+     * @param {Object} metadata - Additional change context
+     */
+    logConfigChange(action, target, user, metadata = {}) {
+        const logData = {
+            action,
+            target,
+            userId: user.id,
+            username: user.tag,
+            ...metadata
+        };
+
+        this.info(`Config change: ${action} ${target}`, logData);
+    }
+
+    /**
+     * Log Discord bot events (ready, disconnect, etc.)
+     * @param {string} event - Discord event name
+     * @param {Object} metadata - Event context
+     */
+    logBotEvent(event, metadata = {}) {
+        this.info(`Bot event: ${event}`, metadata);
+    }
+
+    /**
+     * Get log file statistics for monitoring
+     * @returns {Object} Log statistics
+     */
+    getLogStats() {
+        try {
+            const stats = fs.statSync(this.logFilePath);
+            return {
+                currentLogFile: path.basename(this.logFilePath),
+                fileSize: stats.size,
+                lastModified: stats.mtime,
+                totalLogFiles: fs.readdirSync(this.logsDir).filter(f => f.endsWith('.log')).length
+            };
+        } catch (error) {
+            return {
+                error: 'Unable to get log statistics',
+                details: error.message
+            };
+        }
+    }
+
+    /**
+     * Close the log stream gracefully
+     */
+    close() {
+        try {
+            if (this.logStream && this.logStream.writable) {
+                this.logStream.end();
+                this.logStream = null;
+                console.log('Log stream closed');
+            }
+        } catch (error) {
+            console.error('Error closing log stream:', error);
+        }
+    }
+}
+
+// Create singleton logger instance
+const logger = new Logger();
+
+module.exports = logger;

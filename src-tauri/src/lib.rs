@@ -599,7 +599,14 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
     }
 
     if output.status.success() {
-        Ok(format!("Successfully deployed commands!\n\n{}", stdout))
+        // Include both stdout and stderr in success response for full diagnostic info
+        let mut response = String::from("Successfully deployed commands!\n\n");
+        response.push_str(&stdout);
+        if !stderr.is_empty() {
+            response.push_str("\n\n--- Diagnostic Output ---\n");
+            response.push_str(&stderr);
+        }
+        Ok(response)
     } else {
         Err(format!("Failed to deploy commands:\n{}\n{}", stdout, stderr))
     }
