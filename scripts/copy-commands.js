@@ -55,46 +55,29 @@ utilFiles.forEach(file => {
   }
 });
 
-// 4. Copy required node_modules for deploy-commands.js
+// 4. Copy all node_modules for deploy-commands.js
+// Copying all modules to avoid missing dependency issues
+const nodeModulesSource = path.join(rootDir, 'node_modules');
 const nodeModulesDest = path.join(backendDir, 'node_modules');
 
-if (!fs.existsSync(nodeModulesDest)) {
-  fs.mkdirSync(nodeModulesDest, { recursive: true });
+console.log('Copying node_modules (this may take a moment)...');
+
+if (fs.existsSync(nodeModulesSource)) {
+  fs.cpSync(nodeModulesSource, nodeModulesDest, {
+    recursive: true,
+    filter: (src) => {
+      // Exclude large unnecessary folders to save space
+      const excludeDirs = ['.bin', '.cache', '.vite'];
+      return !excludeDirs.some(dir => src.includes(`node_modules${path.sep}${dir}`));
+    }
+  });
+  console.log(`✓ Copied node_modules`);
+} else {
+  console.warn(`⚠ node_modules not found at ${nodeModulesSource}`);
 }
-
-// List of modules required by deploy-commands.js and their dependencies
-const requiredModules = [
-  '@discordjs',
-  'discord-api-types',
-  'discord.js',
-  'undici',
-  '@sapphire',
-  '@types',
-  'discord-api-types',
-  'ws',
-  'tslib',
-  'fast-deep-equal'
-];
-
-const nodeModulesSource = path.join(rootDir, 'node_modules');
-let moduleCount = 0;
-
-requiredModules.forEach(moduleName => {
-  const source = path.join(nodeModulesSource, moduleName);
-  const dest = path.join(nodeModulesDest, moduleName);
-
-  if (fs.existsSync(source)) {
-    // Copy recursively
-    fs.cpSync(source, dest, { recursive: true });
-    console.log(`✓ Copied node_modules/${moduleName}`);
-    moduleCount++;
-  } else {
-    console.warn(`⚠ Module not found: ${moduleName}`);
-  }
-});
 
 console.log(`\nDeployment files copied successfully!`);
 console.log(`  - ${commandCount} command files`);
 console.log(`  - ${utilCount} util files`);
-console.log(`  - ${moduleCount} npm modules`);
+console.log(`  - All npm modules copied`);
 console.log(`  - 1 deploy script`);
