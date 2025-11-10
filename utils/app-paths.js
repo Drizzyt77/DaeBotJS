@@ -18,12 +18,30 @@ const fs = require('fs');
  * @returns {boolean} True if running from Tauri app, false if standalone
  */
 function isRunningFromTauriApp() {
+    // Check if environment variables are set by Tauri (used for deploy-commands.js)
+    // When Tauri spawns node processes, it sets these environment variables
+    if (process.env.DISCORD_CLIENT_ID || process.env.DISCORD_GUILD_ID) {
+        return true;
+    }
+
     // Check if we're running as a compiled executable (bot.exe)
     // and if the executable is in a typical Tauri app location
     const exePath = process.execPath;
 
-    // If running via node (not compiled), we're in dev mode
+    // If running via node (not compiled), check working directory
     if (exePath.includes('node.exe') || exePath.includes('node')) {
+        // If cwd is in Program Files or contains DaeBot.exe, we're from Tauri
+        const cwd = process.cwd();
+        if (cwd.includes('Program Files') || cwd.includes('DaeBot')) {
+            // Additional check: see if DaeBot.exe exists in parent directories
+            const parts = cwd.split(path.sep);
+            for (let i = parts.length - 1; i >= 0; i--) {
+                const testPath = parts.slice(0, i + 1).join(path.sep);
+                if (fs.existsSync(path.join(testPath, 'DaeBot.exe'))) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
