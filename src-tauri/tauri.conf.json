@@ -39,7 +39,7 @@
       "../dist/bot.exe",
       "../dist/*.dll",
       "../dist/*.node",
-      "../dist/commands/*.js"
+      "../dist-backend"
     ],
     "windows": {
       "certificateThumbprint": null,

@@ -535,123 +535,41 @@ fn quit_app(app: tauri::AppHandle, state: tauri::State<AppState>) {
 async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String> {
     println!("deploy_discord_commands command called");
 
-    // Load config
-    let config = load_config(&app)?;
-    let client_id = config.get("clientId")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing clientId in config")?;
-    let guild_id = config.get("guildId")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing guildId in config")?;
-    let token = config.get("token")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing token in config")?;
+    // Get the resource directory where dist-backend is bundled
+    let resource_dir = app.path().resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    // Get commands directory
-    let app_dir = app.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-    let commands_dir = app_dir.join("commands");
+    let backend_dir = resource_dir.join("dist-backend");
+    let deploy_script = backend_dir.join("deploy-commands.js");
 
-    println!("Reading commands from: {:?}", commands_dir);
+    println!("Backend directory: {:?}", backend_dir);
+    println!("Deploy script path: {:?}", deploy_script);
 
-    // Read all .js files in commands directory
-    let entries = fs::read_dir(&commands_dir)
-        .map_err(|e| format!("Failed to read commands directory: {}", e))?;
-
-    let mut commands = Vec::new();
-    let mut command_names = Vec::new();
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-        let path = entry.path();
-
-        if path.extension().and_then(|s| s.to_str()) == Some("js") {
-            // Read the file content
-            let content = fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read {:?}: {}", path.file_name(), e))?;
-
-            // Extract JSON data from the file (look for .setName, .setDescription patterns)
-            if let Some(json_str) = extract_command_json(&content) {
-                match serde_json::from_str::<serde_json::Value>(&json_str) {
-                    Ok(cmd) => {
-                        if let Some(name) = cmd.get("name").and_then(|v| v.as_str()) {
-                            command_names.push(name.to_string());
-                        }
-                        commands.push(cmd);
-                        println!("Loaded command from: {:?}", path.file_name());
-                    }
-                    Err(e) => {
-                        println!("Warning: Failed to parse command from {:?}: {}", path.file_name(), e);
-                    }
-                }
-            }
-        }
+    if !deploy_script.exists() {
+        return Err(format!("deploy-commands.js not found at {:?}", deploy_script));
     }
 
-    if commands.is_empty() {
-        return Err("No valid commands found in commands directory".to_string());
+    // Spawn Node.js process to run deploy-commands.js
+    // Set working directory to backend_dir so relative paths work
+    let output = Command::new("node")
+        .arg("deploy-commands.js")
+        .current_dir(&backend_dir)
+        .output()
+        .map_err(|e| format!("Failed to execute deploy script: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    println!("Deploy script stdout: {}", stdout);
+    if !stderr.is_empty() {
+        println!("Deploy script stderr: {}", stderr);
     }
 
-    println!("Found {} commands to deploy: {:?}", commands.len(), command_names);
-
-    // Deploy to Discord using REST API
-    let client = reqwest::Client::new();
-    let url = format!("https://discord.com/api/v9/applications/{}/guilds/{}/commands", client_id, guild_id);
-
-    let response = client
-        .put(&url)
-        .header("Authorization", format!("Bot {}", token))
-        .header("Content-Type", "application/json")
-        .json(&commands)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to send request to Discord: {}", e))?;
-
-    if response.status().is_success() {
-        let result: Vec<serde_json::Value> = response.json().await
-            .map_err(|e| format!("Failed to parse Discord response: {}", e))?;
-
-        let deployed_names: Vec<String> = result.iter()
-            .filter_map(|cmd| cmd.get("name").and_then(|v| v.as_str()).map(String::from))
-            .collect();
-
-        Ok(format!("Successfully deployed {} command(s):\n  - /{}",
-            deployed_names.len(),
-            deployed_names.join("\n  - /")))
+    if output.status.success() {
+        Ok(format!("Successfully deployed commands!\n\n{}", stdout))
     } else {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        Err(format!("Discord API error ({}): {}", status, error_text))
+        Err(format!("Failed to deploy commands:\n{}\n{}", stdout, stderr))
     }
-}
-
-// Helper function to extract command JSON from JavaScript file
-fn extract_command_json(content: &str) -> Option<String> {
-    // Try to extract the toJSON() result by parsing the SlashCommandBuilder calls
-    // This is a simplified parser - looks for .setName and .setDescription patterns
-
-    let name = content.lines()
-        .find(|line| line.contains(".setName("))
-        .and_then(|line| {
-            line.split(".setName(")
-                .nth(1)
-                .and_then(|s| s.split(')')
-                    .next()
-                    .map(|s| s.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`')))
-        })?;
-
-    let description = content.lines()
-        .find(|line| line.contains(".setDescription("))
-        .and_then(|line| {
-            line.split(".setDescription(")
-                .nth(1)
-                .and_then(|s| s.split(')')
-                    .next()
-                    .map(|s| s.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`')))
-        })?;
-
-    // Build basic command JSON
-    Some(format!(r#"{{"name":"{}","description":"{}","options":[]}}"#, name, description))
 }
 
 #[tauri::command]
