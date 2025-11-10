@@ -55,7 +55,70 @@ utilFiles.forEach(file => {
   }
 });
 
-// 4. Copy all node_modules for deploy-commands.js
+// 4. Copy database folder
+const databaseSource = path.join(rootDir, 'database');
+const databaseDest = path.join(backendDir, 'database');
+
+if (!fs.existsSync(databaseDest)) {
+  fs.mkdirSync(databaseDest, { recursive: true });
+  console.log('Created dist-backend/database directory');
+}
+
+let databaseCount = 0;
+if (fs.existsSync(databaseSource)) {
+  const databaseFiles = fs.readdirSync(databaseSource);
+  databaseFiles.forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(path.join(databaseSource, file), path.join(databaseDest, file));
+      console.log(`✓ Copied database/${file}`);
+      databaseCount++;
+    }
+  });
+}
+
+// 5. Copy services folder
+const servicesSource = path.join(rootDir, 'services');
+const servicesDest = path.join(backendDir, 'services');
+
+if (!fs.existsSync(servicesDest)) {
+  fs.mkdirSync(servicesDest, { recursive: true });
+  console.log('Created dist-backend/services directory');
+}
+
+let servicesCount = 0;
+if (fs.existsSync(servicesSource)) {
+  const servicesFiles = fs.readdirSync(servicesSource);
+  servicesFiles.forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(path.join(servicesSource, file), path.join(servicesDest, file));
+      console.log(`✓ Copied services/${file}`);
+      servicesCount++;
+    }
+  });
+}
+
+// 6. Copy helpers folder
+const helpersSource = path.join(rootDir, 'helpers');
+const helpersDest = path.join(backendDir, 'helpers');
+
+if (!fs.existsSync(helpersDest)) {
+  fs.mkdirSync(helpersDest, { recursive: true });
+  console.log('Created dist-backend/helpers directory');
+}
+
+let helpersCount = 0;
+if (fs.existsSync(helpersSource)) {
+  const helpersFiles = fs.readdirSync(helpersSource);
+  helpersFiles.forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(path.join(helpersSource, file), path.join(helpersDest, file));
+      console.log(`✓ Copied helpers/${file}`);
+      helpersCount++;
+    }
+  });
+}
+
+// 7. Copy all node_modules for deploy-commands.js
 // Copying all modules to avoid missing dependency issues
 const nodeModulesSource = path.join(rootDir, 'node_modules');
 const nodeModulesDest = path.join(backendDir, 'node_modules');
@@ -79,5 +142,8 @@ if (fs.existsSync(nodeModulesSource)) {
 console.log(`\nDeployment files copied successfully!`);
 console.log(`  - ${commandCount} command files`);
 console.log(`  - ${utilCount} util files`);
+console.log(`  - ${databaseCount} database files`);
+console.log(`  - ${servicesCount} service files`);
+console.log(`  - ${helpersCount} helper files`);
 console.log(`  - All npm modules copied`);
 console.log(`  - 1 deploy script`);
