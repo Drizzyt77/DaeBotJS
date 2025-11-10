@@ -15,6 +15,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
+const { getDataPath } = require('../utils/app-paths');
 
 // Helper function to get config service (lazy loaded to avoid circular dependency)
 let configServiceInstance = null;
@@ -27,20 +28,9 @@ function getConfigService() {
 }
 
 // Database configuration
-// When running in pkg, use AppData directory instead of snapshot
-let DB_DIR, DB_PATH;
-if (process.pkg) {
-    // Running inside pkg - use AppData
-    logger.warn('Running in pkg mode - using AppData directory for database storage');
-    const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
-    DB_DIR = path.join(appDataDir, 'com.daebot.app', 'data');
-    DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
-} else {
-    // Running normally - use project directory
-    logger.warn('Running in normal mode - using project directory for database storage');
-    DB_DIR = path.join(__dirname, '../data');
-    DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
-}
+// Use centralized app-paths utility to determine correct data directory
+const DB_DIR = getDataPath();
+const DB_PATH = path.join(DB_DIR, 'mythic_runs.db');
 
 /**
  * Database schema version for migrations

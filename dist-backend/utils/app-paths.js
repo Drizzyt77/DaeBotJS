@@ -145,6 +145,18 @@ function getLogsPath() {
     }
 }
 
+/**
+ * Get the CSV logs directory path
+ * @returns {string} CSV logs directory path
+ */
+function getCsvLogsPath() {
+    if (isRunningFromTauriApp()) {
+        return path.join(getDaeBotAppData(), 'csv-logs');
+    } else {
+        return path.join(getProjectRoot(), 'csv-logs');
+    }
+}
+
 module.exports = {
     isRunningFromTauriApp,
     getAppDataPath,
@@ -153,5 +165,6 @@ module.exports = {
     getConfigPath,
     getEnvPath,
     getDataPath,
-    getLogsPath
+    getLogsPath,
+    getCsvLogsPath
 };

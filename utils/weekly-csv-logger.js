@@ -16,20 +16,16 @@ const fs = require('fs');
 const path = require('path');
 const weeklyHelper = require('../helpers/weekly');
 const logger = require('./logger');
+const { getCsvLogsPath } = require('./app-paths');
 
 /**
  * Weekly CSV Logger class for M+ data persistence
  */
 class WeeklyCsvLogger {
     constructor() {
-        // Create csv-logs directory if it doesn't exist
-        // When running in pkg, use AppData directory instead of snapshot
-        if (process.pkg) {
-            const appDataDir = process.env.APPDATA || process.env.HOME || process.cwd();
-            this.csvLogsDir = path.join(appDataDir, 'com.daebot.app', 'csv-logs');
-        } else {
-            this.csvLogsDir = path.join(__dirname, '../csv-logs');
-        }
+        // Use centralized app-paths utility to determine correct CSV logs directory
+        this.csvLogsDir = getCsvLogsPath();
+
         if (!fs.existsSync(this.csvLogsDir)) {
             fs.mkdirSync(this.csvLogsDir, { recursive: true });
         }
