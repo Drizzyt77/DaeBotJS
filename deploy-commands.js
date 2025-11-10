@@ -89,11 +89,14 @@ for (const file of commandFiles) {
         // Validate command structure
         if (!command.data) {
             console.warn(`⚠️  ${file} is missing 'data' property, skipping`);
+            console.warn(`   Command object keys:`, Object.keys(command));
             continue;
         }
 
         if (typeof command.data.toJSON !== 'function') {
             console.warn(`⚠️  ${file} data is not a valid SlashCommandBuilder, skipping`);
+            console.warn(`   data type:`, typeof command.data);
+            console.warn(`   data.toJSON type:`, typeof command.data.toJSON);
             continue;
         }
 
@@ -105,6 +108,7 @@ for (const file of commandFiles) {
 
     } catch (error) {
         console.error(`❌ Failed to load ${file}:`, error.message);
+        console.error('   Stack:', error.stack);
     }
 }
 
