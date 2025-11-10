@@ -62,11 +62,18 @@ if (!fs.existsSync(nodeModulesDest)) {
   fs.mkdirSync(nodeModulesDest, { recursive: true });
 }
 
-// List of modules required by deploy-commands.js
+// List of modules required by deploy-commands.js and their dependencies
 const requiredModules = [
   '@discordjs',
   'discord-api-types',
-  'discord.js'
+  'discord.js',
+  'undici',
+  '@sapphire',
+  '@types',
+  'discord-api-types',
+  'ws',
+  'tslib',
+  'fast-deep-equal'
 ];
 
 const nodeModulesSource = path.join(rootDir, 'node_modules');
