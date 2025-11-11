@@ -36,6 +36,12 @@ const deployDest = path.join(backendDir, 'deploy-commands.js');
 fs.copyFileSync(deploySource, deployDest);
 console.log(`✓ Copied deploy-commands.js`);
 
+// 2b. Copy insert-manual-run.js
+const insertRunSource = path.join(rootDir, 'insert-manual-run.js');
+const insertRunDest = path.join(backendDir, 'insert-manual-run.js');
+fs.copyFileSync(insertRunSource, insertRunDest);
+console.log(`✓ Copied insert-manual-run.js`);
+
 // 3. Copy utils folder
 const utilsSource = path.join(rootDir, 'utils');
 const utilsDest = path.join(backendDir, 'utils');
@@ -146,4 +152,4 @@ console.log(`  - ${databaseCount} database files`);
 console.log(`  - ${servicesCount} service files`);
 console.log(`  - ${helpersCount} helper files`);
 console.log(`  - All npm modules copied`);
-console.log(`  - 1 deploy script`);
+console.log(`  - 2 backend scripts (deploy-commands.js, insert-manual-run.js)`);

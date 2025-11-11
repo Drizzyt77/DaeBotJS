@@ -1,0 +1,11 @@
+{
+  "version": "1.3.0-beta.3",
+  "notes": "Release version 1.3.0-beta.3 (Pre-release)",
+  "pub_date": "2025-11-11T17:21:25.056Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUZ2hUVHp5UExkNEhRYldKRUJRSURvS09xWlZGTytNK1Z0ZmphdUF0NW1XUHZDMkZVeTlPZXFyQjJRUnV1TXpnSFE0VU5oelVSbnNWS05uVnhEK0NIcVFlQjQ5dTNPS1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyODgxNjg0CWZpbGU6RGFlQm90XzEuMy4wLWJldGEuM194NjQtc2V0dXAuZXhlCmNHNSsxand1akRkYjdrT3NVSTVwdU5DVkQ3dXFWbU5uOFlKNzRxSURvdEh0eGhzL2YreGJoaHU0bzlvdTBMa1cwZE0yWkZrRFFBb3JMbU9Tem5uR0N3PT0K",
+      "url": "https://github.com/Drizzyt77/DaeBotJS/releases/download/v1.3.0-beta.3/DaeBot_1.3.0-beta.3_x64-setup.exe"
+    }
+  }
+}

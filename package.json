@@ -1,6 +1,6 @@
 {
   "name": "daebot",
-  "version": "1.3.0",
+  "version": "1.3.0-beta.3",
   "description": "World of Warcraft Guild Management Discord Bot",
   "main": "main.js",
   "author": "Drizzyt",

@@ -125,3 +125,8 @@ export async function deleteDiscordCommands() {
 export async function copyCommandsFolder() {
     return await invoke('copy_commands_folder');
 }
+
+// Developer Tools
+export async function insertManualRun(runData) {
+    return await invoke('insert_manual_run', { runData });
+}

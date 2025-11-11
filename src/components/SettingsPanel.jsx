@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands, copyCommandsFolder, getBotSettings, updateBotSettings } from '../tauriApi';
+import { getSettings, saveSettings, getConfig, saveConfig, getAppVersion, getBlizzardCredentials, saveBlizzardCredentials, importDatabase, deployDiscordCommands, deleteDiscordCommands, copyCommandsFolder, getBotSettings, updateBotSettings, insertManualRun } from '../tauriApi';
 import useUpdateManager from '../hooks/useUpdateManager';
 import { open, message, ask } from '@tauri-apps/plugin-dialog';
 
@@ -40,6 +40,23 @@ function SettingsPanel({ settings: initialSettings }) {
     const [activeTab, setActiveTab] = useState('general');
     const [saving, setSaving] = useState(false);
     const [appVersion, setAppVersion] = useState('');
+
+    // Developer menu state
+    const [devMenuUnlocked, setDevMenuUnlocked] = useState(false);
+    const [clickCount, setClickCount] = useState(0);
+    const [clickTimer, setClickTimer] = useState(null);
+    const [devRun, setDevRun] = useState({
+        characterName: '',
+        realm: '',
+        region: 'us',
+        dungeon: '',
+        keystoneLevel: 10,
+        completionTime: 0,
+        upgradedLevel: 0,
+        spec: '',
+        role: 'DPS',
+        season: 'season-tww-3'
+    });
 
     // Use the global update manager
     const { updateInfo, checking: checkingUpdates, checkUpdates } = useUpdateManager();
@@ -422,6 +439,31 @@ function SettingsPanel({ settings: initialSettings }) {
         }
     };
 
+    const handleDevMenuClick = () => {
+        // Clear existing timer if present
+        if (clickTimer) {
+            clearTimeout(clickTimer);
+        }
+
+        const newCount = clickCount + 1;
+        setClickCount(newCount);
+
+        if (newCount >= 5) {
+            // Unlock developer menu
+            setDevMenuUnlocked(true);
+            setClickCount(0);
+            setClickTimer(null);
+            message('Developer menu unlocked!', { title: 'DaeBot', kind: 'info' });
+        } else {
+            // Set 2-second timer to reset count
+            const timer = setTimeout(() => {
+                setClickCount(0);
+                setClickTimer(null);
+            }, 2000);
+            setClickTimer(timer);
+        }
+    };
+
     return (
         <div className="settings-panel">
             {/* Tabs */}
@@ -450,12 +492,21 @@ function SettingsPanel({ settings: initialSettings }) {
                 >
                     Season Management
                 </button>
+                {devMenuUnlocked && (
+                    <button
+                        className={`settings-tab ${activeTab === 'developer' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('developer')}
+                        style={{ color: 'var(--warning)' }}
+                    >
+                        Developer
+                    </button>
+                )}
             </div>
 
             {/* General Settings */}
             {activeTab === 'general' && (
                 <div className="settings-section">
-                    <h3>General Settings</h3>
+                    <h3 onClick={handleDevMenuClick} style={{ cursor: 'pointer', userSelect: 'none' }}>General Settings</h3>
 
                     <div className="form-group sync-interval-group">
                         <label htmlFor="syncInterval">Auto-sync Interval</label>
@@ -1034,6 +1085,203 @@ function SettingsPanel({ settings: initialSettings }) {
                             <li>When a new season starts, update these settings before the first sync</li>
                             <li>The bot must be running for syncs to occur</li>
                         </ul>
+                    </div>
+                </div>
+            )}
+
+            {/* Developer Menu */}
+            {activeTab === 'developer' && devMenuUnlocked && (
+                <div className="settings-section">
+                    <h3 style={{ color: 'var(--warning)' }}>Developer Tools</h3>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                        This section contains developer-only tools for testing and database management.
+                    </p>
+
+                    <div className="form-section">
+                        <h4>Manual Run Insertion</h4>
+                        <p className="section-description">
+                            Manually insert a Mythic+ run into the database for testing purposes.
+                        </p>
+
+                        <div className="form-group">
+                            <label htmlFor="devCharacterName">Character Name</label>
+                            <input
+                                id="devCharacterName"
+                                type="text"
+                                className="input"
+                                placeholder="Character name"
+                                value={devRun.characterName}
+                                onChange={(e) => setDevRun({ ...devRun, characterName: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                            <div className="form-group">
+                                <label htmlFor="devRealm">Realm</label>
+                                <input
+                                    id="devRealm"
+                                    type="text"
+                                    className="input"
+                                    placeholder="Realm name"
+                                    value={devRun.realm}
+                                    onChange={(e) => setDevRun({ ...devRun, realm: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="devRegion">Region</label>
+                                <select
+                                    id="devRegion"
+                                    className="input"
+                                    value={devRun.region}
+                                    onChange={(e) => setDevRun({ ...devRun, region: e.target.value })}
+                                >
+                                    <option value="us">US</option>
+                                    <option value="eu">EU</option>
+                                    <option value="kr">KR</option>
+                                    <option value="tw">TW</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="devDungeon">Dungeon Name</label>
+                            <input
+                                id="devDungeon"
+                                type="text"
+                                className="input"
+                                placeholder="e.g., The Dawnbreaker"
+                                value={devRun.dungeon}
+                                onChange={(e) => setDevRun({ ...devRun, dungeon: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="devSeason">Season</label>
+                            <input
+                                id="devSeason"
+                                type="text"
+                                className="input"
+                                placeholder="e.g., season-mid-1"
+                                value={devRun.season}
+                                onChange={(e) => setDevRun({ ...devRun, season: e.target.value })}
+                            />
+                            <small className="tooltip" style={{ display: 'block', marginTop: '0.5rem' }}>
+                                Format: season-[expansion]-[number]. Examples: season-tww-3, season-mid-1
+                            </small>
+                        </div>
+
+                        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                            <div className="form-group">
+                                <label htmlFor="devKeystoneLevel">Keystone Level</label>
+                                <input
+                                    id="devKeystoneLevel"
+                                    type="number"
+                                    className="input"
+                                    placeholder="e.g., 10"
+                                    value={devRun.keystoneLevel}
+                                    onChange={(e) => setDevRun({ ...devRun, keystoneLevel: parseInt(e.target.value) || 0 })}
+                                    min="2"
+                                    max="40"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="devCompletionTime">Completion Time (ms)</label>
+                                <input
+                                    id="devCompletionTime"
+                                    type="number"
+                                    className="input"
+                                    placeholder="e.g., 1800000 (30 min)"
+                                    value={devRun.completionTime}
+                                    onChange={(e) => setDevRun({ ...devRun, completionTime: parseInt(e.target.value) || 0 })}
+                                    min="0"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="devUpgradedLevel">Upgraded Level</label>
+                                <input
+                                    id="devUpgradedLevel"
+                                    type="number"
+                                    className="input"
+                                    placeholder="0-3"
+                                    value={devRun.upgradedLevel}
+                                    onChange={(e) => setDevRun({ ...devRun, upgradedLevel: parseInt(e.target.value) || 0 })}
+                                    min="0"
+                                    max="3"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                            <div className="form-group">
+                                <label htmlFor="devSpec">Spec</label>
+                                <input
+                                    id="devSpec"
+                                    type="text"
+                                    className="input"
+                                    placeholder="e.g., Havoc"
+                                    value={devRun.spec}
+                                    onChange={(e) => setDevRun({ ...devRun, spec: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="devRole">Role</label>
+                                <select
+                                    id="devRole"
+                                    className="input"
+                                    value={devRun.role}
+                                    onChange={(e) => setDevRun({ ...devRun, role: e.target.value })}
+                                >
+                                    <option value="DPS">DPS</option>
+                                    <option value="Tank">Tank</option>
+                                    <option value="Healer">Healer</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button
+                            className="btn btn-primary"
+                            onClick={async () => {
+                                try {
+                                    setSaving(true);
+                                    const result = await insertManualRun(devRun);
+                                    await message(result, { title: 'DaeBot', kind: 'info' });
+
+                                    // Reset form on success
+                                    setDevRun({
+                                        characterName: '',
+                                        realm: '',
+                                        region: 'us',
+                                        dungeon: '',
+                                        keystoneLevel: 10,
+                                        completionTime: 0,
+                                        upgradedLevel: 0,
+                                        spec: '',
+                                        role: 'DPS',
+                                        season: 'season-tww-3'
+                                    });
+                                } catch (error) {
+                                    console.error('Failed to insert run:', error);
+                                    const errorMsg = typeof error === 'string' ? error : (error?.message || String(error) || 'Unknown error');
+                                    await message('Failed to insert run:\n\n' + errorMsg, { title: 'DaeBot', kind: 'error' });
+                                } finally {
+                                    setSaving(false);
+                                }
+                            }}
+                            disabled={saving || !devRun.characterName || !devRun.realm || !devRun.dungeon}
+                        >
+                            {saving ? 'Inserting...' : 'Insert Test Run'}
+                        </button>
+                    </div>
+
+                    <div className="info-box" style={{ marginTop: '1.5rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', borderColor: 'var(--warning)' }}>
+                        <h4 style={{ color: 'var(--warning)' }}>⚠️ Warning</h4>
+                        <p style={{ marginTop: '0.5rem' }}>
+                            This is a developer-only menu. Use with caution. Manually inserted runs may affect statistics and data integrity.
+                        </p>
                     </div>
                 </div>
             )}

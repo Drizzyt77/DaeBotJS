@@ -9,6 +9,7 @@ use tauri::{menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent}};
 use tauri_plugin_updater::UpdaterExt;
 use rusqlite::Connection;
 use chrono::DateTime;
+use url::Url;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Character {
@@ -613,6 +614,91 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
 }
 
 #[tauri::command]
+async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -> Result<String, String> {
+    println!("insert_manual_run command called");
+    println!("Run data: {:?}", run_data);
+
+    // Find insert-manual-run.js script
+    let app_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let resource_path = app.path().resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    // Try multiple locations to find insert-manual-run.js
+    let mut possible_paths = vec![
+        resource_path.join("_up_").join("dist-backend"),
+        app_dir.join("..").join("..").join("..").join("_up_").join("dist-backend"),
+    ];
+
+    // Also check relative to the executable (works in both dev and production)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_parent) = exe_path.parent() {
+            // Check several levels up from the executable
+            let mut current = exe_parent.to_path_buf();
+            for _ in 0..6 {
+                let dist_backend = current.join("dist-backend");
+                if dist_backend.join("insert-manual-run.js").exists() {
+                    possible_paths.insert(0, dist_backend);
+                    break;
+                }
+                current = current.join("..");
+            }
+
+            // Also check if dist-backend is next to the executable (production layout)
+            let exe_dist_backend = exe_parent.join("dist-backend");
+            if exe_dist_backend.join("insert-manual-run.js").exists() {
+                possible_paths.insert(0, exe_dist_backend);
+            }
+        }
+    }
+
+    let mut script_dir = None;
+    for path in &possible_paths {
+        println!("Checking path: {:?}", path);
+        if path.join("insert-manual-run.js").exists() {
+            script_dir = Some(path.clone());
+            println!("Found insert-manual-run.js at: {:?}", path);
+            break;
+        }
+    }
+
+    let script_dir = script_dir.ok_or_else(|| {
+        format!(
+            "insert-manual-run.js not found. Checked:\n  - {:?}\n  - {:?}",
+            possible_paths[0].join("insert-manual-run.js"),
+            possible_paths[1].join("insert-manual-run.js")
+        )
+    })?;
+
+    // Convert run data to JSON string
+    let run_data_json = serde_json::to_string(&run_data)
+        .map_err(|e| format!("Failed to serialize run data: {}", e))?;
+
+    // Spawn Node.js process to run insert-manual-run.js
+    let output = Command::new("node")
+        .arg("insert-manual-run.js")
+        .arg(&run_data_json)
+        .current_dir(&script_dir)
+        .output()
+        .map_err(|e| format!("Failed to execute insert script: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    println!("Insert script stdout: {}", stdout);
+    if !stderr.is_empty() {
+        println!("Insert script stderr: {}", stderr);
+    }
+
+    if output.status.success() {
+        Ok(stdout.to_string())
+    } else {
+        Err(format!("Failed to insert run:\n{}\n{}", stdout, stderr))
+    }
+}
+
+#[tauri::command]
 async fn delete_discord_commands(app: tauri::AppHandle) -> Result<String, String> {
     println!("delete_discord_commands command called");
 
@@ -851,8 +937,28 @@ async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdateInfo, String> 
     println!("Current version: {}", current_version);
     println!("Beta channel enabled: {}", settings.beta_channel);
 
+    // Use different update endpoint based on beta channel setting
+    let update_endpoint = if settings.beta_channel {
+        "https://github.com/Drizzyt77/DaeBotJS/releases/latest/download/latest-beta.json"
+    } else {
+        "https://github.com/Drizzyt77/DaeBotJS/releases/latest/download/latest.json"
+    };
+    println!("Using update endpoint: {}", update_endpoint);
+
+    // Parse the endpoint URL
+    let update_url = match Url::parse(update_endpoint) {
+        Ok(url) => url,
+        Err(e) => {
+            return Err(format!("Invalid update URL: {}", e));
+        }
+    };
+
     // Try to check for updates using the updater API
-    match app.updater_builder().build() {
+    let updater_builder = app.updater_builder()
+        .endpoints(vec![update_url])
+        .map_err(|e| format!("Failed to set update endpoints: {}", e))?;
+
+    match updater_builder.build() {
         Ok(updater) => {
             match updater.check().await {
                 Ok(update_result) => {
@@ -2134,7 +2240,8 @@ pub fn run() {
         update_bot_settings,
         deploy_discord_commands,
         delete_discord_commands,
-        copy_commands_folder
+        copy_commands_folder,
+        insert_manual_run
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
