@@ -542,33 +542,42 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
 
     println!("Resource directory: {:?}", resource_dir);
 
-    // Check multiple possible locations for dist-backend
+    // Check multiple possible locations for commands.json
     // 1. Direct path (dev builds)
     // 2. _up_ subdirectory (production builds with updates)
     let possible_paths = vec![
-        resource_dir.join("dist-backend"),
-        resource_dir.join("_up_").join("dist-backend"),
+        resource_dir.join("dist-backend").join("commands.json"),
+        resource_dir.join("_up_").join("dist-backend").join("commands.json"),
     ];
 
-    let mut backend_dir = None;
+    let mut commands_file = None;
     for path in &possible_paths {
         println!("Checking path: {:?}", path);
-        if path.join("deploy-commands.js").exists() {
-            backend_dir = Some(path.clone());
-            println!("Found deploy-commands.js at: {:?}", path);
+        if path.exists() {
+            commands_file = Some(path.clone());
+            println!("Found commands.json at: {:?}", path);
             break;
         }
     }
 
-    let backend_dir = backend_dir.ok_or_else(|| {
+    let commands_file = commands_file.ok_or_else(|| {
         format!(
-            "deploy-commands.js not found. Checked:\n  - {:?}\n  - {:?}",
-            possible_paths[0].join("deploy-commands.js"),
-            possible_paths[1].join("deploy-commands.js")
+            "commands.json not found. Checked:\n  - {:?}\n  - {:?}",
+            possible_paths[0],
+            possible_paths[1]
         )
     })?;
 
-    // Load config to pass to deploy script
+    // Read and parse commands.json
+    let commands_content = fs::read_to_string(&commands_file)
+        .map_err(|e| format!("Failed to read commands.json: {}", e))?;
+
+    let commands: Vec<serde_json::Value> = serde_json::from_str(&commands_content)
+        .map_err(|e| format!("Failed to parse commands.json: {}", e))?;
+
+    println!("Loaded {} commands from commands.json", commands.len());
+
+    // Load config
     let config = load_config(&app)?;
     let client_id = config.get("clientId")
         .and_then(|v| v.as_str())
@@ -580,37 +589,44 @@ async fn deploy_discord_commands(app: tauri::AppHandle) -> Result<String, String
         .and_then(|v| v.as_str())
         .ok_or("Missing token in config")?;
 
-    // Spawn Node.js process to run deploy-commands.js
-    // Pass config via environment variables since config.json may not be accessible
-    let output = Command::new("node")
-        .arg("deploy-commands.js")
-        .current_dir(&backend_dir)
-        .env("DISCORD_CLIENT_ID", client_id)
-        .env("DISCORD_GUILD_ID", guild_id)
-        .env("DISCORD_TOKEN", token)
-        .output()
-        .map_err(|e| format!("Failed to execute deploy script: {}", e))?;
+    // Deploy commands via Discord REST API
+    let client = reqwest::Client::new();
+    let url = format!("https://discord.com/api/v9/applications/{}/guilds/{}/commands", client_id, guild_id);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Deploying to Discord API: {}", url);
 
-    println!("Deploy script stdout: {}", stdout);
-    if !stderr.is_empty() {
-        println!("Deploy script stderr: {}", stderr);
+    let response = client
+        .put(&url)
+        .header("Authorization", format!("Bot {}", token))
+        .header("Content-Type", "application/json")
+        .json(&commands)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send deployment request: {}", e))?;
+
+    let status = response.status();
+    println!("Discord API response status: {}", status);
+
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("Discord API error ({}): {}", status, error_text));
     }
 
-    if output.status.success() {
-        // Include both stdout and stderr in success response for full diagnostic info
-        let mut response = String::from("Successfully deployed commands!\n\n");
-        response.push_str(&stdout);
-        if !stderr.is_empty() {
-            response.push_str("\n\n--- Diagnostic Output ---\n");
-            response.push_str(&stderr);
+    let result: Vec<serde_json::Value> = response.json().await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Build success message
+    let mut message = format!("Successfully deployed {} command(s)!\n\n", result.len());
+    message.push_str("Registered commands:\n");
+
+    for cmd in &result {
+        if let Some(name) = cmd.get("name").and_then(|v| v.as_str()) {
+            message.push_str(&format!("  - /{}\n", name));
         }
-        Ok(response)
-    } else {
-        Err(format!("Failed to deploy commands:\n{}\n{}", stdout, stderr))
     }
+
+    println!("Deployment successful!");
+    Ok(message)
 }
 
 #[tauri::command]

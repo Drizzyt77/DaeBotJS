@@ -9,6 +9,7 @@
     "start": "node main.js",
     "dev": "vite",
     "build": "vite build",
+    "generate:commands": "node scripts/generate-commands-json.js",
     "build:bot": "pkg main.js --targets node20-win-x64 --output dist/bot.exe --compress Brotli && node scripts/copy-native-modules.js && node scripts/copy-commands.js",
     "deploy": "node deploy-commands.js",
     "tauri": "tauri",

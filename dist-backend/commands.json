@@ -1,0 +1,452 @@
+[
+  {
+    "options": [
+      {
+        "type": 3,
+        "name": "character",
+        "description": "Character name",
+        "required": true
+      },
+      {
+        "type": 3,
+        "choices": [
+          {
+            "name": "Ara-Kara, City of Echoes",
+            "value": "Ara-Kara, City of Echoes"
+          },
+          {
+            "name": "Eco-Dome Al'dani",
+            "value": "Eco-Dome Al'dani"
+          },
+          {
+            "name": "Halls of Atonement",
+            "value": "Halls of Atonement"
+          },
+          {
+            "name": "The Dawnbreaker",
+            "value": "The Dawnbreaker"
+          },
+          {
+            "name": "Priory of the Sacred Flame",
+            "value": "Priory of the Sacred Flame"
+          },
+          {
+            "name": "Operation: Floodgate",
+            "value": "Operation: Floodgate"
+          },
+          {
+            "name": "Tazavesh: So'leah's Gambit",
+            "value": "Tazavesh: So'leah's Gambit"
+          },
+          {
+            "name": "Tazavesh: Streets of Wonder",
+            "value": "Tazavesh: Streets of Wonder"
+          }
+        ],
+        "name": "dungeon",
+        "description": "Dungeon name",
+        "required": true
+      },
+      {
+        "max_value": 40,
+        "min_value": 2,
+        "type": 4,
+        "name": "level",
+        "description": "Keystone level (e.g., 10, 15, 20)",
+        "required": true
+      },
+      {
+        "autocomplete": true,
+        "type": 3,
+        "name": "spec",
+        "description": "Specialization used for this run",
+        "required": true
+      },
+      {
+        "type": 3,
+        "choices": [
+          {
+            "name": "Timed (+1)",
+            "value": "+1"
+          },
+          {
+            "name": "Timed (+2)",
+            "value": "+2"
+          },
+          {
+            "name": "Timed (+3)",
+            "value": "+3"
+          },
+          {
+            "name": "Depleted",
+            "value": "depleted"
+          }
+        ],
+        "name": "result",
+        "description": "Was the key timed?",
+        "required": true
+      },
+      {
+        "type": 3,
+        "name": "date",
+        "description": "Date completed (YYYY-MM-DD or MM/DD/YYYY)",
+        "required": true
+      },
+      {
+        "type": 10,
+        "name": "score",
+        "description": "Run score",
+        "required": true
+      },
+      {
+        "type": 3,
+        "name": "season",
+        "description": "Season (default: current season)",
+        "required": false
+      }
+    ],
+    "name": "add-run",
+    "description": "Manually add a historical M+ run to the database",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 1,
+        "name": "view",
+        "description": "View all current bot settings",
+        "options": []
+      },
+      {
+        "type": 1,
+        "name": "set-season",
+        "description": "Update current season information",
+        "options": [
+          {
+            "max_value": 100,
+            "min_value": 1,
+            "type": 4,
+            "name": "season-id",
+            "description": "Blizzard API season ID (e.g., 15)",
+            "required": true
+          },
+          {
+            "type": 3,
+            "name": "season-name",
+            "description": "RaiderIO season name (e.g., season-tww-3)",
+            "required": true
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "set-region",
+        "description": "Update default region",
+        "options": [
+          {
+            "type": 3,
+            "choices": [
+              {
+                "name": "US - Americas",
+                "value": "us"
+              },
+              {
+                "name": "EU - Europe",
+                "value": "eu"
+              },
+              {
+                "name": "KR - Korea",
+                "value": "kr"
+              },
+              {
+                "name": "TW - Taiwan",
+                "value": "tw"
+              },
+              {
+                "name": "CN - China",
+                "value": "cn"
+              }
+            ],
+            "name": "region",
+            "description": "Default region code",
+            "required": true
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "set-dungeons",
+        "description": "Update active dungeon pool (opens a modal)",
+        "options": []
+      }
+    ],
+    "name": "bot-settings",
+    "description": "Manage global bot configuration settings (admin only)",
+    "default_member_permissions": "8",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "characters",
+    "description": "Load Character Menu",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 3,
+        "choices": [
+          {
+            "name": "Recent Runs (last ~500)",
+            "value": "recent"
+          },
+          {
+            "name": "Best Runs (top per dungeon)",
+            "value": "best"
+          }
+        ],
+        "name": "type",
+        "description": "Type of runs to collect",
+        "required": false
+      }
+    ],
+    "name": "collect-runs",
+    "description": "Collect M+ runs from Raider.IO into local database",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 1,
+        "name": "file",
+        "description": "Import runs from a JSON file attachment",
+        "options": [
+          {
+            "name": "json",
+            "description": "JSON file with runs to import",
+            "required": true,
+            "type": 11
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "template",
+        "description": "Generate an example JSON template",
+        "options": []
+      }
+    ],
+    "name": "import-runs",
+    "description": "Bulk import historical M+ runs from JSON",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 3,
+        "name": "realm",
+        "description": "WoW realm name (e.g., \"Stormrage\", \"Area-52\")",
+        "required": true
+      },
+      {
+        "type": 3,
+        "name": "character",
+        "description": "Character name to look up",
+        "required": true
+      }
+    ],
+    "name": "keytracker",
+    "description": "Track Mythic+ keys for any character over the past 2 weekly resets",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 3,
+        "name": "character",
+        "description": "Character name (leave empty for all config characters)",
+        "required": false
+      }
+    ],
+    "name": "load-best-runs",
+    "description": "Load best M+ runs from Raider.IO into database (initial population)",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 1,
+        "name": "add",
+        "description": "Add a character to the tracking list",
+        "options": [
+          {
+            "type": 3,
+            "name": "character",
+            "description": "Character name to add",
+            "required": true
+          },
+          {
+            "autocomplete": true,
+            "type": 3,
+            "name": "realm",
+            "description": "Character realm (e.g., Thrall)",
+            "required": true
+          },
+          {
+            "type": 3,
+            "choices": [
+              {
+                "name": "US",
+                "value": "us"
+              },
+              {
+                "name": "EU",
+                "value": "eu"
+              },
+              {
+                "name": "KR",
+                "value": "kr"
+              },
+              {
+                "name": "TW",
+                "value": "tw"
+              },
+              {
+                "name": "CN",
+                "value": "cn"
+              }
+            ],
+            "name": "region",
+            "description": "Character region",
+            "required": false
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "edit",
+        "description": "Edit a character's realm or region",
+        "options": [
+          {
+            "autocomplete": true,
+            "type": 3,
+            "name": "character",
+            "description": "Character name to edit",
+            "required": true
+          },
+          {
+            "autocomplete": true,
+            "type": 3,
+            "name": "realm",
+            "description": "New realm (leave empty to keep current)",
+            "required": false
+          },
+          {
+            "type": 3,
+            "choices": [
+              {
+                "name": "US",
+                "value": "us"
+              },
+              {
+                "name": "EU",
+                "value": "eu"
+              },
+              {
+                "name": "KR",
+                "value": "kr"
+              },
+              {
+                "name": "TW",
+                "value": "tw"
+              },
+              {
+                "name": "CN",
+                "value": "cn"
+              }
+            ],
+            "name": "region",
+            "description": "New region (leave empty to keep current)",
+            "required": false
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "remove",
+        "description": "Remove a character from the tracking list",
+        "options": [
+          {
+            "autocomplete": true,
+            "type": 3,
+            "name": "character",
+            "description": "Character name to remove",
+            "required": true
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "list",
+        "description": "Display the current character list",
+        "options": []
+      },
+      {
+        "type": 1,
+        "name": "csv-stats",
+        "description": "Display CSV log statistics and file information",
+        "options": []
+      },
+      {
+        "type": 1,
+        "name": "export-csv",
+        "description": "Manually trigger CSV export of current M+ data",
+        "options": []
+      }
+    ],
+    "name": "manage-characters",
+    "description": "Add or remove characters from the bot configuration",
+    "default_member_permissions": "32",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "ping",
+    "description": "Pings the bot to test connectivity and response time",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 1,
+        "name": "set-threshold",
+        "description": "Set the gold threshold for token price alerts (admin only)",
+        "options": [
+          {
+            "max_value": 1000000,
+            "min_value": 50000,
+            "type": 4,
+            "name": "gold",
+            "description": "Minimum gold price for alerts (e.g., 300000)",
+            "required": true
+          }
+        ]
+      },
+      {
+        "type": 1,
+        "name": "enable-dms",
+        "description": "Toggle personal DM notifications for token price alerts",
+        "options": []
+      },
+      {
+        "type": 1,
+        "name": "status",
+        "description": "View current token price and notification settings",
+        "options": []
+      }
+    ],
+    "name": "token-settings",
+    "description": "Manage WoW token price notification settings",
+    "type": 1
+  }
+]

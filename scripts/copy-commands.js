@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const rootDir = path.join(__dirname, '..');
 const backendDir = path.join(rootDir, 'dist-backend');
@@ -7,6 +8,19 @@ const backendDir = path.join(rootDir, 'dist-backend');
 // Create backend directory if it doesn't exist
 if (!fs.existsSync(backendDir)) {
   fs.mkdirSync(backendDir, { recursive: true });
+}
+
+// First, generate commands.json from command definitions
+console.log('Generating commands.json...');
+try {
+  execSync('node scripts/generate-commands-json.js', {
+    cwd: rootDir,
+    stdio: 'inherit'
+  });
+  console.log('✓ Generated commands.json\n');
+} catch (error) {
+  console.error('❌ Failed to generate commands.json:', error.message);
+  process.exit(1);
 }
 
 console.log('Copying deployment files to dist-backend...');
