@@ -618,84 +618,156 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
     println!("insert_manual_run command called");
     println!("Run data: {:?}", run_data);
 
-    // Find insert-manual-run.js script
+    // Extract fields from run_data
+    let character_name = run_data.get("characterName")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing characterName")?;
+    let realm = run_data.get("realm")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing realm")?;
+    let region = run_data.get("region")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing region")?;
+    let dungeon = run_data.get("dungeon")
+        .and_then(|v| v.as_str())
+        .ok_or("Missing dungeon")?;
+    let keystone_level = run_data.get("keystoneLevel")
+        .and_then(|v| v.as_i64())
+        .ok_or("Missing keystoneLevel")? as i64;
+    let completion_time = run_data.get("completionTime")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i64;
+    let upgraded_level = run_data.get("upgradedLevel")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i64;
+    let spec = run_data.get("spec")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown");
+    let role = run_data.get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("DPS");
+    let season = run_data.get("season")
+        .and_then(|v| v.as_str())
+        .unwrap_or("manual-insert");
+
+    // Get database path
     let app_dir = app.path().app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let data_dir = app_dir.join("data");
+    fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+    let db_path = data_dir.join("mythic_runs.db");
 
-    let resource_path = app.path().resource_dir()
-        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
-
-    // Try multiple locations to find insert-manual-run.js
-    let mut possible_paths = vec![
-        resource_path.join("_up_").join("dist-backend"),
-        app_dir.join("..").join("..").join("..").join("_up_").join("dist-backend"),
-    ];
-
-    // Also check relative to the executable (works in both dev and production)
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_parent) = exe_path.parent() {
-            // Check several levels up from the executable
-            let mut current = exe_parent.to_path_buf();
-            for _ in 0..6 {
-                let dist_backend = current.join("dist-backend");
-                if dist_backend.join("insert-manual-run.js").exists() {
-                    possible_paths.insert(0, dist_backend);
-                    break;
-                }
-                current = current.join("..");
-            }
-
-            // Also check if dist-backend is next to the executable (production layout)
-            let exe_dist_backend = exe_parent.join("dist-backend");
-            if exe_dist_backend.join("insert-manual-run.js").exists() {
-                possible_paths.insert(0, exe_dist_backend);
-            }
-        }
+    if !db_path.exists() {
+        return Err("Database not found. Please start the bot first to initialize the database.".to_string());
     }
 
-    let mut script_dir = None;
-    for path in &possible_paths {
-        println!("Checking path: {:?}", path);
-        if path.join("insert-manual-run.js").exists() {
-            script_dir = Some(path.clone());
-            println!("Found insert-manual-run.js at: {:?}", path);
-            break;
-        }
-    }
+    // Open database connection
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
 
-    let script_dir = script_dir.ok_or_else(|| {
-        format!(
-            "insert-manual-run.js not found. Checked:\n  - {:?}\n  - {:?}",
-            possible_paths[0].join("insert-manual-run.js"),
-            possible_paths[1].join("insert-manual-run.js")
-        )
-    })?;
+    // Enable WAL mode
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
 
-    // Convert run data to JSON string
-    let run_data_json = serde_json::to_string(&run_data)
-        .map_err(|e| format!("Failed to serialize run data: {}", e))?;
+    // Step 1: Upsert character
+    println!("Upserting character: {}-{} ({})", character_name, realm, region);
 
-    // Spawn Node.js process to run insert-manual-run.js
-    let output = Command::new("node")
-        .arg("insert-manual-run.js")
-        .arg(&run_data_json)
-        .current_dir(&script_dir)
-        .output()
-        .map_err(|e| format!("Failed to execute insert script: {}", e))?;
+    // Check if character exists
+    let character_id: Option<i64> = conn.query_row(
+        "SELECT id FROM characters WHERE name = ?1 AND realm = ?2 AND region = ?3",
+        [character_name, realm, region],
+        |row| row.get(0)
+    ).ok();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    println!("Insert script stdout: {}", stdout);
-    if !stderr.is_empty() {
-        println!("Insert script stderr: {}", stderr);
-    }
-
-    if output.status.success() {
-        Ok(stdout.to_string())
+    let character_id = if let Some(id) = character_id {
+        // Update existing character
+        conn.execute(
+            "UPDATE characters SET spec_name = ?1, spec_role = ?2, updated_at = ?3 WHERE id = ?4",
+            (spec, role, chrono::Utc::now().timestamp_millis(), id),
+        ).map_err(|e| format!("Failed to update character: {}", e))?;
+        println!("Updated existing character with ID: {}", id);
+        id
     } else {
-        Err(format!("Failed to insert run:\n{}\n{}", stdout, stderr))
+        // Insert new character
+        conn.execute(
+            "INSERT INTO characters (name, realm, region, class, spec_name, spec_role, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            (
+                character_name,
+                realm,
+                region,
+                "Unknown", // class
+                spec,
+                role,
+                chrono::Utc::now().timestamp_millis(),
+                chrono::Utc::now().timestamp_millis(),
+            ),
+        ).map_err(|e| format!("Failed to insert character: {}", e))?;
+
+        let id = conn.last_insert_rowid();
+        println!("Created new character with ID: {}", id);
+        id
+    };
+
+    // Step 2: Insert the run
+    println!("Inserting run for character ID: {}", character_id);
+    let completed_timestamp = chrono::Utc::now().timestamp_millis();
+    let keystone_run_id = completed_timestamp; // Use timestamp as unique ID
+    let is_completed_within_time = if upgraded_level > 0 { 1 } else { 0 };
+
+    // Check for duplicate
+    let duplicate_check: Option<i64> = conn.query_row(
+        "SELECT id FROM mythic_runs WHERE character_id = ?1 AND dungeon = ?2 AND mythic_level = ?3 AND completed_timestamp = ?4",
+        (character_id, dungeon, keystone_level, completed_timestamp),
+        |row| row.get(0)
+    ).ok();
+
+    if duplicate_check.is_some() {
+        return Ok(format!(
+            "⚠️  Run already exists (duplicate detected)\n\
+             Character: {}-{}\n\
+             Dungeon: {} +{}\n\
+             Spec: {} ({})",
+            character_name, realm, dungeon, keystone_level, spec, role
+        ));
     }
+
+    conn.execute(
+        "INSERT INTO mythic_runs (
+            character_id, dungeon, mythic_level, completed_timestamp,
+            duration, keystone_run_id, is_completed_within_time, score,
+            num_keystone_upgrades, spec_name, spec_role, affixes, season
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        (
+            character_id,
+            dungeon,
+            keystone_level,
+            completed_timestamp,
+            completion_time,
+            keystone_run_id,
+            is_completed_within_time,
+            0, // score - manual runs don't have scores
+            upgraded_level,
+            spec,
+            role,
+            rusqlite::types::Null, // affixes - manual runs don't track affixes
+            season,
+        ),
+    ).map_err(|e| format!("Failed to insert run: {}", e))?;
+
+    let run_id = conn.last_insert_rowid();
+    println!("Successfully inserted run with ID: {}", run_id);
+
+    Ok(format!(
+        "✅ Successfully inserted manual run!\n\
+         Run ID: {}\n\
+         Character: {}-{}\n\
+         Dungeon: {} +{}\n\
+         Spec: {} ({})\n\
+         Season: {}",
+        run_id, character_name, realm, dungeon, keystone_level, spec, role, season
+    ))
 }
 
 #[tauri::command]
