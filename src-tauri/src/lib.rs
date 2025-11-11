@@ -683,7 +683,7 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
     let character_id = if let Some(id) = character_id {
         // Update existing character
         conn.execute(
-            "UPDATE characters SET spec_name = ?1, spec_role = ?2, updated_at = ?3 WHERE id = ?4",
+            "UPDATE characters SET active_spec_name = ?1, active_spec_role = ?2, updated_at = ?3 WHERE id = ?4",
             (spec, role, chrono::Utc::now().timestamp_millis(), id),
         ).map_err(|e| format!("Failed to update character: {}", e))?;
         println!("Updated existing character with ID: {}", id);
@@ -691,7 +691,7 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
     } else {
         // Insert new character
         conn.execute(
-            "INSERT INTO characters (name, realm, region, class, spec_name, spec_role, created_at, updated_at)
+            "INSERT INTO characters (name, realm, region, class, active_spec_name, active_spec_role, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             (
                 character_name,
@@ -737,8 +737,8 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
         "INSERT INTO mythic_runs (
             character_id, dungeon, mythic_level, completed_timestamp,
             duration, keystone_run_id, is_completed_within_time, score,
-            num_keystone_upgrades, spec_name, spec_role, affixes, season
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            num_keystone_upgrades, spec_name, spec_role, affixes, season, created_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         (
             character_id,
             dungeon,
@@ -753,6 +753,7 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
             role,
             rusqlite::types::Null, // affixes - manual runs don't track affixes
             season,
+            chrono::Utc::now().timestamp_millis(), // created_at
         ),
     ).map_err(|e| format!("Failed to insert run: {}", e))?;
 

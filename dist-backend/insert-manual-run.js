@@ -67,7 +67,7 @@ async function insertManualRun() {
             spec_name: runData.spec || 'Unknown',
             spec_role: runData.role || 'DPS',
             affixes: null, // Manual runs don't track affixes
-            season: 'manual-insert' // Mark as manually inserted
+            season: runData.season || 'manual-insert' // Use provided season or mark as manually inserted
         });
 
         if (result.inserted) {
