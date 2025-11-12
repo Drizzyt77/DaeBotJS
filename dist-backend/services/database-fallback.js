@@ -79,29 +79,28 @@ function getCharacterFromDB(characterName, options = {}) {
 
 /**
  * Get recent runs data for multiple characters (fallback for Raider.IO)
- * @param {Array<string>} characterNames - Array of character names
+ * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
  * @param {Object} options - Query options
  * @returns {Array} Array of character data with recent runs
  */
-function getRecentRunsFromDB(characterNames, options = {}) {
+function getRecentRunsFromDB(characters, options = {}) {
     const config = getConfigService();
-    const {
-        realm = config.getDefaultRealm(),
-        region = config.getDefaultRegion(),
-        season = config.getCurrentSeasonName()
-    } = options;
+    const defaultSeason = options.season || config.getCurrentSeasonName();
 
     logger.info('Using database fallback for recent runs', {
-        characterCount: characterNames.length,
-        realm,
-        region,
-        season
+        characterCount: characters.length,
+        season: defaultSeason
     });
 
     const results = [];
 
-    for (const name of characterNames) {
-        const characterData = getCharacterFromDB(name, { realm, region, season });
+    for (const char of characters) {
+        // Handle both string (legacy) and object (new) format
+        const name = typeof char === 'string' ? char : char.name;
+        const realm = typeof char === 'object' && char.realm ? char.realm : config.getDefaultRealm();
+        const region = typeof char === 'object' && char.region ? char.region : config.getDefaultRegion();
+
+        const characterData = getCharacterFromDB(name, { realm, region, season: defaultSeason });
         if (characterData) {
             results.push({
                 name: characterData.name,
@@ -113,7 +112,7 @@ function getRecentRunsFromDB(characterNames, options = {}) {
     }
 
     logger.info('Database fallback complete', {
-        requested: characterNames.length,
+        requested: characters.length,
         found: results.length
     });
 
@@ -122,29 +121,28 @@ function getRecentRunsFromDB(characterNames, options = {}) {
 
 /**
  * Get mythic plus best runs for multiple characters (fallback for Raider.IO)
- * @param {Array<string>} characterNames - Array of character names
+ * @param {Array<string|Object>} characters - Array of character names or character objects with {name, realm, region}
  * @param {Object} options - Query options
  * @returns {Array} Array of character data with best runs
  */
-function getMythicPlusDataFromDB(characterNames, options = {}) {
+function getMythicPlusDataFromDB(characters, options = {}) {
     const config = getConfigService();
-    const {
-        realm = config.getDefaultRealm(),
-        region = config.getDefaultRegion(),
-        season = config.getCurrentSeasonName()
-    } = options;
+    const defaultSeason = options.season || config.getCurrentSeasonName();
 
     logger.info('Using database fallback for mythic+ data', {
-        characterCount: characterNames.length,
-        realm,
-        region,
-        season
+        characterCount: characters.length,
+        season: defaultSeason
     });
 
     const results = [];
 
-    for (const name of characterNames) {
+    for (const char of characters) {
         try {
+            // Handle both string (legacy) and object (new) format
+            const name = typeof char === 'string' ? char : char.name;
+            const realm = typeof char === 'object' && char.realm ? char.realm : config.getDefaultRealm();
+            const region = typeof char === 'object' && char.region ? char.region : config.getDefaultRegion();
+
             const db = getDatabase();
 
             // Get character info
@@ -156,6 +154,7 @@ function getMythicPlusDataFromDB(characterNames, options = {}) {
             const character = charStmt.get(name, realm, region);
 
             if (!character) {
+                logger.debug('Character not found in database', { name, realm, region });
                 continue;
             }
 
@@ -163,7 +162,7 @@ function getMythicPlusDataFromDB(characterNames, options = {}) {
             const bestRuns = db.getBestRunsPerDungeon(name, null, {
                 realm,
                 region,
-                season
+                season: defaultSeason
             });
 
             // Calculate M+ score (simplified - sum of all dungeon scores)
@@ -184,14 +183,14 @@ function getMythicPlusDataFromDB(characterNames, options = {}) {
 
         } catch (error) {
             logger.error('Failed to get M+ data from database for character', {
-                characterName: name,
+                character: char,
                 error: error.message
             });
         }
     }
 
     logger.info('Database fallback complete', {
-        requested: characterNames.length,
+        requested: characters.length,
         found: results.length
     });
 
