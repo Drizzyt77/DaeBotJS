@@ -279,7 +279,13 @@ function calculateWeeklyStats(runs, lastReset, characterName = null) {
     if (characterName) {
         try {
             const { calculateResilientLevel } = require('../services/run-query-service');
-            resilientLevel = calculateResilientLevel(characterName);
+            const { getConfigService } = require('../services/config-service');
+            const config = getConfigService();
+
+            // Pass season filter to ensure resilient level only considers current season dungeons
+            resilientLevel = calculateResilientLevel(characterName, {
+                season: config.getCurrentSeasonName()
+            });
         } catch (error) {
             // If database query fails, resilient level remains 0
             resilientLevel = 0;
