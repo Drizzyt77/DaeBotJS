@@ -666,6 +666,9 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
         .and_then(|v| v.as_str())
         .unwrap_or("manual-insert");
 
+    // Normalize realm to lowercase to match database storage
+    let normalized_realm = realm.to_lowercase();
+
     // Get database path
     let app_dir = app.path().app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
@@ -687,12 +690,12 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
         .map_err(|e| format!("Failed to set WAL mode: {}", e))?;
 
     // Step 1: Upsert character
-    println!("Upserting character: {}-{} ({})", character_name, realm, region);
+    println!("Upserting character: {}-{} ({})", character_name, normalized_realm, region);
 
     // Check if character exists
     let character_id: Option<i64> = conn.query_row(
         "SELECT id FROM characters WHERE name = ?1 AND realm = ?2 AND region = ?3",
-        [character_name, realm, region],
+        [character_name, normalized_realm.as_str(), region],
         |row| row.get(0)
     ).ok();
 
@@ -711,7 +714,7 @@ async fn insert_manual_run(app: tauri::AppHandle, run_data: serde_json::Value) -
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             (
                 character_name,
-                realm,
+                normalized_realm.as_str(),
                 region,
                 "Unknown", // class
                 spec,
