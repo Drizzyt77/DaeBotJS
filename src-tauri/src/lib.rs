@@ -1291,7 +1291,45 @@ fn log_updater(message: &str) {
 async fn install_update(app: tauri::AppHandle) -> Result<String, String> {
     log_updater("[UPDATER] Starting update installation...");
 
-    match app.updater_builder().build() {
+    // Get bot settings to check beta channel preference (same as check_for_updates)
+    let settings = match get_bot_settings(app.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            log_updater(&format!("[UPDATER] Failed to get bot settings: {}, defaulting to stable channel", e));
+            BotSettings {
+                season_id: 0,
+                season_name: String::new(),
+                default_region: String::new(),
+                default_realm: String::new(),
+                active_dungeons: Vec::new(),
+                beta_channel: false,
+                updated_at: None,
+            }
+        }
+    };
+
+    // Use different update endpoint based on beta channel setting
+    let update_endpoint = if settings.beta_channel {
+        "https://github.com/Drizzyt77/DaeBotJS/releases/latest/download/latest-beta.json"
+    } else {
+        "https://github.com/Drizzyt77/DaeBotJS/releases/latest/download/latest.json"
+    };
+    log_updater(&format!("[UPDATER] Using update endpoint: {}", update_endpoint));
+
+    // Parse the endpoint URL
+    let update_url = match Url::parse(update_endpoint) {
+        Ok(url) => url,
+        Err(e) => {
+            return Err(format!("[UPDATER ERROR] Invalid update URL: {}", e));
+        }
+    };
+
+    // Build updater with the correct endpoint
+    let updater_builder = app.updater_builder()
+        .endpoints(vec![update_url])
+        .map_err(|e| format!("[UPDATER ERROR] Failed to set endpoints: {}", e))?;
+
+    match updater_builder.build() {
         Ok(updater) => {
             log_updater("[UPDATER] Updater builder created successfully");
 
