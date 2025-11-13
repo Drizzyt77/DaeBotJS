@@ -23,6 +23,9 @@ function getCharacterFromDB(characterName, options = {}) {
         season = config.getCurrentSeasonName()
     } = options;
 
+    // Normalize realm to lowercase to match database storage
+    const normalizedRealm = realm.toLowerCase();
+
     try {
         const db = getDatabase();
 
@@ -32,7 +35,7 @@ function getCharacterFromDB(characterName, options = {}) {
             FROM characters
             WHERE name = ? AND realm = ? AND region = ?
         `);
-        const character = charStmt.get(characterName, realm, region);
+        const character = charStmt.get(characterName, normalizedRealm, region);
 
         if (!character) {
             return null;
@@ -40,7 +43,7 @@ function getCharacterFromDB(characterName, options = {}) {
 
         // Get recent runs (last 500)
         const runs = db.getRunsBySpec(characterName, null, {
-            realm,
+            realm: normalizedRealm,
             region,
             season,
             limit: 500
@@ -100,12 +103,17 @@ function getRecentRunsFromDB(characters, options = {}) {
         const realm = typeof char === 'object' && char.realm ? char.realm : config.getDefaultRealm();
         const region = typeof char === 'object' && char.region ? char.region : config.getDefaultRegion();
 
-        const characterData = getCharacterFromDB(name, { realm, region, season: defaultSeason });
+        // Normalize realm to lowercase to match database storage
+        const normalizedRealm = realm.toLowerCase();
+
+        const characterData = getCharacterFromDB(name, { realm: normalizedRealm, region, season: defaultSeason });
         if (characterData) {
             results.push({
                 name: characterData.name,
                 class: characterData.class,
                 role: characterData.active_spec_role,
+                realm: characterData.realm,
+                region: characterData.region,
                 recent_runs: characterData.recent_runs
             });
         }
@@ -143,6 +151,9 @@ function getMythicPlusDataFromDB(characters, options = {}) {
             const realm = typeof char === 'object' && char.realm ? char.realm : config.getDefaultRealm();
             const region = typeof char === 'object' && char.region ? char.region : config.getDefaultRegion();
 
+            // Normalize realm to lowercase to match database storage
+            const normalizedRealm = realm.toLowerCase();
+
             const db = getDatabase();
 
             // Get character info
@@ -151,7 +162,7 @@ function getMythicPlusDataFromDB(characters, options = {}) {
                 FROM characters
                 WHERE name = ? AND realm = ? AND region = ?
             `);
-            const character = charStmt.get(name, realm, region);
+            const character = charStmt.get(name, normalizedRealm, region);
 
             if (!character) {
                 logger.debug('Character not found in database', { name, realm, region });
@@ -160,7 +171,7 @@ function getMythicPlusDataFromDB(characters, options = {}) {
 
             // Get best runs per dungeon
             const bestRuns = db.getBestRunsPerDungeon(name, null, {
-                realm,
+                realm: normalizedRealm,
                 region,
                 season: defaultSeason
             });

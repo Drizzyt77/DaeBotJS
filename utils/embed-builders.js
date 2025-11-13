@@ -481,7 +481,7 @@ function createWeeklyMplusEmbed(mplusData, lastReset) {
     // Cache stats for all characters to avoid recalculating during sort and display
     const statsCache = new Map();
     mplusData.forEach(character => {
-        const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name);
+        const stats = calculateWeeklyStats(character.recent_runs || [], lastReset, character.name, character.realm, character.region);
         statsCache.set(character.name, stats);
     });
 

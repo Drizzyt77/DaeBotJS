@@ -257,9 +257,11 @@ function findMostRelevantRaid(raidActivity) {
  * @param {Array} runs - Array of recent run objects with completed_at dates
  * @param {Date} lastReset - Date of the last weekly reset
  * @param {string} characterName - Optional character name for resilient level calculation
+ * @param {string} realm - Optional character realm
+ * @param {string} region - Optional character region
  * @returns {Object} Statistics object with categorized run counts
  */
-function calculateWeeklyStats(runs, lastReset, characterName = null) {
+function calculateWeeklyStats(runs, lastReset, characterName = null, realm = null, region = null) {
     const weeklyRuns = runs.filter(run => {
         const runDate = new Date(run.completed_at);
         return runDate >= lastReset;
@@ -282,10 +284,14 @@ function calculateWeeklyStats(runs, lastReset, characterName = null) {
             const { getConfigService } = require('../services/config-service');
             const config = getConfigService();
 
-            // Pass season filter to ensure resilient level only considers current season dungeons
-            resilientLevel = calculateResilientLevel(characterName, {
+            // Pass season filter and realm/region to ensure correct character lookup
+            const options = {
                 season: config.getCurrentSeasonName()
-            });
+            };
+            if (realm) options.realm = realm;
+            if (region) options.region = region;
+
+            resilientLevel = calculateResilientLevel(characterName, options);
         } catch (error) {
             // If database query fails, resilient level remains 0
             resilientLevel = 0;

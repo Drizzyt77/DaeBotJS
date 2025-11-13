@@ -112,6 +112,8 @@ function getRecentRunsFromDB(characters, options = {}) {
                 name: characterData.name,
                 class: characterData.class,
                 role: characterData.active_spec_role,
+                realm: characterData.realm,
+                region: characterData.region,
                 recent_runs: characterData.recent_runs
             });
         }
