@@ -1,8 +1,8 @@
 import React from 'react';
 import useStats from '../hooks/useStats';
 
-function StatsChart() {
-    const { stats, loading, refreshStats } = useStats();
+function StatsChart({ season = null }) {
+    const { stats, loading, refreshStats } = useStats(season);
 
     const formatBytes = (bytes) => {
         if (!bytes) return '0 B';

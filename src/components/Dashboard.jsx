@@ -262,7 +262,7 @@ function Dashboard({ settings }) {
                                     </div>
                                 )}
                             </div>
-                            <StatsChart />
+                            <StatsChart season={selectedSeason} />
                         </div>
                     </div>
                 )}
