@@ -363,13 +363,13 @@ async function generateCharacterImage(characterData, gearData, viewMode = VIEW_M
 
         // Draw content based on view mode
         if (currentViewMode === VIEW_MODES.COMPACT) {
-            drawCompactView(ctx, characterData, gearData);
+            await drawCompactView(ctx, characterData, gearData);
         } else if (currentViewMode === VIEW_MODES.COMPARISON) {
             drawComparisonView(ctx, characterData, gearData);
         } else {
             // Default detailed view
             drawEquippedGear(ctx, gearData);
-            drawMythicPlusRuns(ctx, characterData);
+            await drawMythicPlusRuns(ctx, characterData);
             drawStatsSection(ctx, characterData, gearData);
         }
 
@@ -632,7 +632,7 @@ function drawEquippedGear(ctx, gearData) {
  * @param {CanvasRenderingContext2D} ctx - Canvas rendering context
  * @param {Object} characterData - Character data with M+ runs
  */
-function drawMythicPlusRuns(ctx, characterData) {
+async function drawMythicPlusRuns(ctx, characterData) {
     const sectionX = PADDING + 1000;
     const sectionY = PADDING + HEADER_HEIGHT + 40; // Just enough space for view mode buttons
     const sectionWidth = 930;
@@ -669,7 +669,7 @@ function drawMythicPlusRuns(ctx, characterData) {
         cacheInitialized: imageCache.initialized
     });
 
-    // Map dungeon names to cached images
+    // Map dungeon names to cached images, loading on-demand if needed
     for (const run of displayRuns) {
         const dungeonName = run.dungeon;
         const simplifiedName = dungeonName.toLowerCase().replace(/[\s\-':.,]/g, '');
@@ -679,11 +679,25 @@ function drawMythicPlusRuns(ctx, characterData) {
             dungeonImages.set(dungeonName, imageCache.dungeonImages.get(simplifiedName));
             logger.debug('Using cached dungeon image', { dungeonName, simplifiedName });
         } else {
-            logger.debug('Dungeon image not in cache', {
-                dungeonName,
-                simplifiedName,
-                cacheKeys: Array.from(imageCache.dungeonImages.keys())
-            });
+            // Try to load on-demand (important for pkg mode where cache isn't pre-loaded)
+            try {
+                const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
+                const imagePath = path.join(dungeonDir, `${simplifiedName}.jpg`);
+
+                logger.debug('Attempting to load dungeon image on-demand', { dungeonName, simplifiedName, imagePath });
+
+                const image = await loadImage(imagePath);
+                imageCache.dungeonImages.set(simplifiedName, image);
+                dungeonImages.set(dungeonName, image);
+
+                logger.debug('Successfully loaded dungeon image on-demand', { dungeonName, simplifiedName });
+            } catch (error) {
+                logger.debug('Failed to load dungeon image on-demand', {
+                    dungeonName,
+                    simplifiedName,
+                    error: error.message
+                });
+            }
         }
     }
 
@@ -813,7 +827,7 @@ function drawStatsSection(ctx, characterData, gearData) {
  * @param {Object} characterData - Character data
  * @param {Object} gearData - Gear data
  */
-function drawCompactView(ctx, characterData, gearData) {
+async function drawCompactView(ctx, characterData, gearData) {
     // Compact view - only M+ dungeons, larger text, full canvas width
     const sectionX = PADDING + 120;
     const sectionY = PADDING + HEADER_HEIGHT + 40;
@@ -843,15 +857,37 @@ function drawCompactView(ctx, characterData, gearData) {
     const displayRuns = sortedRuns.slice(0, 10);
     const runHeight = Math.max(100, (sectionHeight - 80) / displayRuns.length); // Increased minimum height for larger fonts
 
+    // Pre-load dungeon images for compact view
+    const dungeonImages = new Map();
+    for (const run of displayRuns) {
+        const dungeonKey = run.dungeon.toLowerCase().replace(/[\s\-':.,]/g, '');
+
+        // Check cache first
+        if (imageCache.dungeonImages.has(dungeonKey)) {
+            dungeonImages.set(run.dungeon, imageCache.dungeonImages.get(dungeonKey));
+        } else {
+            // Try to load on-demand
+            try {
+                const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
+                const imagePath = path.join(dungeonDir, `${dungeonKey}.jpg`);
+                const image = await loadImage(imagePath);
+                imageCache.dungeonImages.set(dungeonKey, image);
+                dungeonImages.set(run.dungeon, image);
+            } catch (error) {
+                // Image not available - will render without icon
+                logger.debug('Failed to load dungeon image for compact view', { dungeon: run.dungeon, error: error.message });
+            }
+        }
+    }
+
     let currentY = runsStartY;
 
     displayRuns.forEach((run, index) => {
         // Calculate center Y position for this entry
         const entryCenterY = currentY + (runHeight / 2);
 
-        // Load dungeon image if available
-        const dungeonKey = run.dungeon.toLowerCase().replace(/[\s\-':.,]/g, ''); // Added comma to removal
-        const dungeonImage = imageCache.dungeonImages.get(dungeonKey); // No .jpg extension needed
+        // Get dungeon image from pre-loaded map
+        const dungeonImage = dungeonImages.get(run.dungeon);
 
         if (dungeonImage) {
             const iconSize = 70; // Even larger icon to match increased font size
