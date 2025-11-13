@@ -23,6 +23,9 @@ function getAvailableSpecs(characterName, options = {}) {
         season = config.getCurrentSeasonName()
     } = options;
 
+    // Normalize realm to lowercase to match database storage
+    const normalizedRealm = realm.toLowerCase();
+
     try {
         const db = getDatabase();
 
@@ -36,7 +39,7 @@ function getAvailableSpecs(characterName, options = {}) {
             ORDER BY r.spec_name
         `;
 
-        const params = [characterName, realm, region];
+        const params = [characterName, normalizedRealm, region];
         if (season) params.push(season);
 
         const stmt = db.db.prepare(query);
@@ -69,10 +72,13 @@ function getBestRunsForUI(characterName, specName = null, options = {}) {
         season = config.getCurrentSeasonName()
     } = options;
 
+    // Normalize realm to lowercase to match database storage
+    const normalizedRealm = realm.toLowerCase();
+
     try {
         const db = getDatabase();
         const runs = db.getBestRunsPerDungeon(characterName, specName, {
-            realm,
+            realm: normalizedRealm,
             region,
             season
         });
@@ -178,6 +184,9 @@ function calculateResilientLevel(characterName, options = {}) {
         season = config.getCurrentSeasonName()
     } = options;
 
+    // Normalize realm to lowercase to match database storage
+    const normalizedRealm = realm.toLowerCase();
+
     try {
         const db = getDatabase();
 
@@ -193,7 +202,7 @@ function calculateResilientLevel(characterName, options = {}) {
             GROUP BY r.dungeon
         `;
 
-        const params = [characterName, realm, region];
+        const params = [characterName, normalizedRealm, region];
         if (season) params.push(season);
 
         const stmt = db.db.prepare(query);
@@ -256,6 +265,9 @@ function getRunCountsBySpec(characterName, options = {}) {
         season = config.getCurrentSeasonName()
     } = options;
 
+    // Normalize realm to lowercase to match database storage
+    const normalizedRealm = realm.toLowerCase();
+
     try {
         const db = getDatabase();
 
@@ -269,7 +281,7 @@ function getRunCountsBySpec(characterName, options = {}) {
             GROUP BY r.spec_name
         `;
 
-        const params = [characterName, realm, region];
+        const params = [characterName, normalizedRealm, region];
         if (season) params.push(season);
 
         const stmt = db.db.prepare(query);
