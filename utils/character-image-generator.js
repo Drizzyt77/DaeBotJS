@@ -244,13 +244,16 @@ async function initializeImageCache() {
         }
 
         // Load dungeon images
-        const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
+        const baseDir = process.pkg
+            ? path.dirname(process.execPath)
+            : path.join(__dirname, '..');
+        const dungeonDir = path.join(baseDir, 'images', 'dungeons');
         const dungeonFiles = await fs.readdir(dungeonDir);
 
         logger.info('Initializing dungeon image cache', { fileCount: dungeonFiles.length });
 
         // Load class images
-        const classDir = path.join(__dirname, '..', 'images', 'classes');
+        const classDir = path.join(baseDir, 'images', 'classes');
         const classFiles = await fs.readdir(classDir);
 
         logger.info('Initializing class image cache', { fileCount: classFiles.length });
@@ -681,7 +684,12 @@ async function drawMythicPlusRuns(ctx, characterData) {
         } else {
             // Try to load on-demand (important for pkg mode where cache isn't pre-loaded)
             try {
-                const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
+                // In pkg mode, assets are in a directory relative to the executable
+                // In normal mode, they're relative to __dirname
+                const baseDir = process.pkg
+                    ? path.dirname(process.execPath)
+                    : path.join(__dirname, '..');
+                const dungeonDir = path.join(baseDir, 'images', 'dungeons');
                 const imagePath = path.join(dungeonDir, `${simplifiedName}.jpg`);
 
                 logger.debug('Attempting to load dungeon image on-demand', { dungeonName, simplifiedName, imagePath });
@@ -868,7 +876,12 @@ async function drawCompactView(ctx, characterData, gearData) {
         } else {
             // Try to load on-demand
             try {
-                const dungeonDir = path.join(__dirname, '..', 'images', 'dungeons');
+                // In pkg mode, assets are in a directory relative to the executable
+                // In normal mode, they're relative to __dirname
+                const baseDir = process.pkg
+                    ? path.dirname(process.execPath)
+                    : path.join(__dirname, '..');
+                const dungeonDir = path.join(baseDir, 'images', 'dungeons');
                 const imagePath = path.join(dungeonDir, `${dungeonKey}.jpg`);
                 const image = await loadImage(imagePath);
                 imageCache.dungeonImages.set(dungeonKey, image);
