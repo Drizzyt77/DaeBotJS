@@ -1,11 +1,11 @@
 {
-  "version": "1.3.0-beta.3",
-  "notes": "Release version 1.3.0-beta.3 (Pre-release)",
-  "pub_date": "2025-11-12T01:47:24.388Z",
+  "version": "1.3.0-beta.7",
+  "notes": "Release version 1.3.0-beta.7 (Pre-release)",
+  "pub_date": "2025-11-14T00:41:16.672Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUZ2hUVHp5UExkNEkvNFRKV3NzWUtpYnByd3RGUUdVU3hQazhnZ2RHSWFzOGpkdVQxTU5haFhjRjF5Z1RQMHdJL0dVdC94YnNJbkE2WnpYNXlML3V0K1hxOTAvUFJDeGc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyOTEyMDQ0CWZpbGU6RGFlQm90XzEuMy4wLWJldGEuM194NjQtc2V0dXAuZXhlClQ1QlFtUEJRZWQ2MzYwSS8xWGgzZU9zR05sNlhKYUQwdjJFZ3RDdHA5dDZ2ZHpTRSsxd1RjVVl1TTE2Y0R5bEJDYjlkOW54b1puY3laMUIzUmV6UEJ3PT0K",
-      "url": "https://github.com/Drizzyt77/DaeBotJS/releases/download/v1.3.0-beta.3/DaeBot_1.3.0-beta.3_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUZ2hUVHp5UExkNERuSmZHZFErakwvcjA0ZFYweWJrMmdCUXJGYWtQQ2RiRXQyM3lJYW9yWmd0em1HTFZaRGlKODNyRFI1amlnbHNadmR3K2IxK2dKZEdVZ2F6ZjN1UlFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMDgwODc2CWZpbGU6RGFlQm90XzEuMy4wLWJldGEuN194NjQtc2V0dXAuZXhlCkhXUUF3aUNPT2JwdkVSSmduYlV4Z1JFRGd3dzJ4Q0JsVExMdjY2bWZ5dEEvVnIvVTZXRkJnZXJwdE5sV29tMUUzUG9veHpiK0phTjRjQnMwMVVHMERRPT0K",
+      "url": "https://github.com/Drizzyt77/DaeBotJS/releases/download/v1.3.0-beta.7/DaeBot_1.3.0-beta.7_x64-setup.exe"
     }
   }
 }
